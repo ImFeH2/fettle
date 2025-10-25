@@ -1,0 +1,22 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: merco_timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: merco
+      POSTGRES_PASSWORD: merco_password
+      POSTGRES_DB: merco
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U merco" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  timescale_data:
+    driver: local
