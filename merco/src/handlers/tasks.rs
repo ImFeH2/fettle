@@ -23,12 +23,6 @@ pub struct CreateFetchTaskRequest {
     pub symbol: String,
     pub exchange: String,
     pub timeframe: Timeframe,
-    #[serde(default, with = "ts_milliseconds_option")]
-    #[ts(optional, type = "number")]
-    pub start: Option<DateTime<Utc>>,
-    #[serde(default, with = "ts_milliseconds_option")]
-    #[ts(optional, type = "number")]
-    pub end: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, TS)]
@@ -45,15 +39,11 @@ pub async fn create_fetch_task(
     let context = TaskContext {
         db_pool: state.db_pool,
     };
-
     let config = TaskConfig::FetchCandles {
         symbol: request.symbol,
         exchange: request.exchange,
         timeframe: request.timeframe,
-        start_date: request.start,
-        end_date: request.end,
     };
-
     let task_id = state.task_manager.create_task(context, config).await;
 
     Ok(Json(CreateTaskResponse {

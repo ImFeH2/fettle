@@ -11,7 +11,8 @@ import type {
   SaveSourceQuery,
   DeleteSourceQuery,
   MoveSourceQuery,
-  AddStrategyRequest
+  AddStrategyRequest,
+  AvailableCandleInfo
 } from '@/types'
 
 const API_BASE_URL = 'http://localhost:3001'
@@ -108,6 +109,8 @@ export const api = {
       })
       return fetchAPI<Candle[]>(`/candles?${query}`)
     },
+
+    available: () => fetchAPI<AvailableCandleInfo[]>('/candles/available'),
   },
 
   source: {

@@ -1,4 +1,4 @@
-mod candles;
+pub mod candles;
 
 pub use candles::Candle;
 pub use candles::Timeframe;

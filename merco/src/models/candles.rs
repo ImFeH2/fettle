@@ -6,6 +6,8 @@ use sqlx::{FromRow, Type};
 use std::{hash::Hash, str::FromStr};
 use ts_rs::TS;
 
+use crate::errors::AppError;
+
 #[derive(Debug, Clone, Serialize, FromRow, TS)]
 #[ts(export)]
 pub struct Candle {
@@ -131,9 +133,25 @@ impl fmt::Display for Timeframe {
 }
 
 impl FromStr for Timeframe {
-    type Err = serde_json::Error;
+    type Err = AppError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         serde_json::from_str(&format!("\"{}\"", s))
+            .map_err(|e| AppError::Internal(format!("Invalid timeframe \"{}\": {}", s, e)))
     }
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct AvailableCandleInfo {
+    pub exchange: String,
+    pub symbol: String,
+    pub timeframe: Timeframe,
+    pub count: i64,
+    #[serde(default, with = "ts_milliseconds")]
+    #[ts(type = "number")]
+    pub start: DateTime<Utc>,
+    #[serde(default, with = "ts_milliseconds")]
+    #[ts(type = "number")]
+    pub end: DateTime<Utc>,
 }

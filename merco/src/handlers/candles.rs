@@ -1,5 +1,6 @@
 use crate::app::AppState;
 use crate::errors::ApiResult;
+use crate::models::candles::AvailableCandleInfo;
 use crate::models::{Candle, Timeframe};
 use crate::services;
 use axum::{
@@ -13,8 +14,8 @@ use ts_rs::TS;
 #[derive(Debug, Deserialize, TS)]
 #[ts(export)]
 pub struct GetCandlesQuery {
-    pub symbol: String,
     pub exchange: String,
+    pub symbol: String,
     pub timeframe: Timeframe,
     #[serde(default, with = "ts_milliseconds_option")]
     #[ts(optional, type = "number")]
@@ -39,4 +40,11 @@ pub async fn get_candles(
     .await?;
 
     Ok(Json(candles))
+}
+
+pub async fn available_candles(
+    State(state): State<AppState>,
+) -> ApiResult<Vec<AvailableCandleInfo>> {
+    let available_candles = services::candles::get_available_candles(&state.db_pool).await?;
+    Ok(Json(available_candles))
 }

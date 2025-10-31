@@ -1,5 +1,5 @@
 use crate::errors::AppResult;
-use crate::models::{Candle, Timeframe};
+use crate::models::{Candle, Timeframe, candles::AvailableCandleInfo};
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
@@ -104,4 +104,26 @@ pub async fn get_latest_candle(
         .await?;
 
     Ok(latest_candle)
+}
+
+pub async fn get_available_candles(pool: &PgPool) -> AppResult<Vec<AvailableCandleInfo>> {
+    let result = sqlx::query_as!(
+        AvailableCandleInfo,
+        r#"
+        SELECT
+            exchange,
+            symbol,
+            timeframe as "timeframe!: Timeframe",
+            COUNT(*) AS "count!",
+            MIN(timestamp) AS "start!",
+            MAX(timestamp) AS "end!"
+        FROM candles
+        GROUP BY exchange, symbol, timeframe
+        ORDER BY exchange, symbol, timeframe
+        "#
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(result)
 }

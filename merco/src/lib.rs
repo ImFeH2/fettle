@@ -1,5 +1,5 @@
-mod app;
-mod errors;
+pub mod app;
+pub mod errors;
 mod exchange;
 pub mod handlers;
 pub mod models;

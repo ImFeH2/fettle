@@ -4,6 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
+use sqlx::migrate::MigrateError;
 use thiserror::Error;
 use toml_edit::TomlError;
 use ts_rs::TS;
@@ -152,6 +153,12 @@ impl From<TomlError> for AppError {
 impl From<cargo_metadata::Error> for AppError {
     fn from(err: cargo_metadata::Error) -> Self {
         AppError::Internal(err.to_string())
+    }
+}
+
+impl From<MigrateError> for AppError {
+    fn from(err: MigrateError) -> Self {
+        AppError::Database(sqlx::Error::Migrate(Box::new(err)))
     }
 }
 

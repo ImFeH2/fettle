@@ -1,4 +1,4 @@
-use chrono::{serde::ts_milliseconds, serde::ts_milliseconds_option, DateTime, Utc};
+use chrono::{DateTime, Utc, serde::ts_milliseconds, serde::ts_milliseconds_option};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use ts_rs::TS;
@@ -31,12 +31,6 @@ pub enum TaskConfig {
         symbol: String,
         exchange: String,
         timeframe: Timeframe,
-        #[serde(with = "ts_milliseconds_option")]
-        #[ts(optional, type = "number")]
-        start_date: Option<DateTime<Utc>>,
-        #[serde(with = "ts_milliseconds_option")]
-        #[ts(optional, type = "number")]
-        end_date: Option<DateTime<Utc>>,
     },
 }
 

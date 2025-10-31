@@ -52,13 +52,9 @@ impl TaskManager {
                 symbol,
                 exchange,
                 timeframe,
-                start_date,
-                end_date,
             } => {
-                self.fetch_candles_data(
-                    task_id, context, &symbol, &exchange, timeframe, start_date, end_date,
-                )
-                .await
+                self.fetch_candles_data(task_id, context, &symbol, &exchange, timeframe)
+                    .await
             }
         };
 
@@ -79,8 +75,6 @@ impl TaskManager {
         symbol: &str,
         exchange: &str,
         timeframe: Timeframe,
-        start_date: Option<DateTime<Utc>>,
-        end_date: Option<DateTime<Utc>>,
     ) -> AppResult<serde_json::Value> {
         tracing::info!(
             "Fetching candles data for {} on {} with timeframe {}",
@@ -145,8 +139,6 @@ impl TaskManager {
             "symbol": symbol,
             "exchange": exchange,
             "timeframe": timeframe,
-            "start_date": start_date,
-            "end_date": end_date,
             "records": total,
         }))
     }

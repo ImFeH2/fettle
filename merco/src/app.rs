@@ -44,6 +44,10 @@ pub fn create_app(db_pool: PgPool, shutdown_token: CancellationToken) -> Router 
         .route("/tasks/stream", get(handlers::tasks::stream_tasks))
         .route("/tasks/fetch", post(handlers::tasks::create_fetch_task))
         .route("/candles", get(handlers::candles::get_candles))
+        .route(
+            "/candles/available",
+            get(handlers::candles::available_candles),
+        )
         .route("/strategy/add", post(handlers::strategy::add_strategy))
         .route("/strategy/backtest", post(handlers::strategy::backtest))
         .route("/strategy/source/get", get(handlers::source::get_source))
