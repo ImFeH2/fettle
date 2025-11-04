@@ -1,1 +1,6 @@
-/target
+/target/
+/strategies/
+
+.vscode/
+.idea/
+.zed/

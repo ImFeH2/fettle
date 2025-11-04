@@ -1,5 +1,5 @@
-pub mod manager;
-pub mod types;
+pub mod backtest;
+pub mod fetch_candles;
 
-pub use manager::TaskManager;
-pub use types::{Task, TaskConfig, TaskEvent};
+pub use backtest::{BacktestResult, BacktestStatus, BacktestTask};
+pub use fetch_candles::{FetchCandlesResult, FetchCandlesStatus, FetchCandlesTask};

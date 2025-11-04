@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Toaster } from 'sonner'
 import Navbar from '@/components/Navbar'
 import MarketData from '@/pages/MarketData'
 import Strategy from '@/pages/Strategy'
@@ -10,29 +11,23 @@ import Settings from '@/pages/Settings'
 function App() {
   const [activeTab, setActiveTab] = useState('market')
 
-  const renderPage = () => {
-    switch (activeTab) {
-      case 'market':
-        return <MarketData />
-      case 'strategy':
-        return <Strategy />
-      case 'backtest':
-        return <Backtest />
-      case 'optimization':
-        return <Optimization />
-      case 'live':
-        return <Live />
-      case 'settings':
-        return <Settings />
-      default:
-        return <MarketData />
-    }
-  }
-
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       <Navbar activeTab={activeTab} onTabChange={setActiveTab} />
-      <main className="flex-1 overflow-hidden">{renderPage()}</main>
+      <main className="flex-1 overflow-hidden">
+        {activeTab === 'market' && <MarketData />}
+        {activeTab === 'strategy' && <Strategy />}
+        {activeTab === 'backtest' && <Backtest />}
+        {activeTab === 'optimization' && <Optimization />}
+        {activeTab === 'live' && <Live />}
+        {activeTab === 'settings' && <Settings />}
+      </main>
+      <Toaster
+        position="bottom-right"
+        expand={false}
+        richColors
+        closeButton
+      />
     </div>
   )
 }

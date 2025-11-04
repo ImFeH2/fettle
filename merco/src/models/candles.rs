@@ -1,3 +1,4 @@
+use crate::errors::AppError;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, TimeDelta, Utc, serde::ts_milliseconds};
 use core::fmt;
@@ -5,8 +6,6 @@ use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Type};
 use std::{hash::Hash, str::FromStr};
 use ts_rs::TS;
-
-use crate::errors::AppError;
 
 #[derive(Debug, Clone, Serialize, FromRow, TS)]
 #[ts(export)]
@@ -38,6 +37,10 @@ pub enum Timeframe {
     #[sqlx(rename = "1s")]
     S1,
 
+    #[serde(rename = "10s")]
+    #[sqlx(rename = "10s")]
+    S10,
+
     #[serde(rename = "1m")]
     #[sqlx(rename = "1m")]
     M1,
@@ -49,6 +52,10 @@ pub enum Timeframe {
     #[serde(rename = "5m")]
     #[sqlx(rename = "5m")]
     M5,
+
+    #[serde(rename = "10m")]
+    #[sqlx(rename = "10m")]
+    M10,
 
     #[serde(rename = "15m")]
     #[sqlx(rename = "15m")]
@@ -65,6 +72,10 @@ pub enum Timeframe {
     #[serde(rename = "2h")]
     #[sqlx(rename = "2h")]
     H2,
+
+    #[serde(rename = "3h")]
+    #[sqlx(rename = "3h")]
+    H3,
 
     #[serde(rename = "4h")]
     #[sqlx(rename = "4h")]
@@ -97,6 +108,18 @@ pub enum Timeframe {
     #[serde(rename = "1M")]
     #[sqlx(rename = "1M")]
     MN1,
+
+    #[serde(rename = "3M")]
+    #[sqlx(rename = "3M")]
+    MN3,
+
+    #[serde(rename = "4M")]
+    #[sqlx(rename = "4M")]
+    MN4,
+
+    #[serde(rename = "1y")]
+    #[sqlx(rename = "1y")]
+    Y1,
 }
 
 impl Timeframe {
@@ -106,13 +129,16 @@ impl Timeframe {
     pub fn to_delta(&self) -> TimeDelta {
         match self {
             Timeframe::S1 => TimeDelta::seconds(1),
+            Timeframe::S10 => TimeDelta::seconds(10),
             Timeframe::M1 => TimeDelta::minutes(1),
             Timeframe::M3 => TimeDelta::minutes(3),
             Timeframe::M5 => TimeDelta::minutes(5),
+            Timeframe::M10 => TimeDelta::minutes(10),
             Timeframe::M15 => TimeDelta::minutes(15),
             Timeframe::M30 => TimeDelta::minutes(30),
             Timeframe::H1 => TimeDelta::hours(1),
             Timeframe::H2 => TimeDelta::hours(2),
+            Timeframe::H3 => TimeDelta::hours(3),
             Timeframe::H4 => TimeDelta::hours(4),
             Timeframe::H6 => TimeDelta::hours(6),
             Timeframe::H8 => TimeDelta::hours(8),
@@ -121,6 +147,9 @@ impl Timeframe {
             Timeframe::D3 => TimeDelta::days(3),
             Timeframe::W1 => TimeDelta::weeks(1),
             Timeframe::MN1 => TimeDelta::days(30),
+            Timeframe::MN3 => TimeDelta::days(90),
+            Timeframe::MN4 => TimeDelta::days(120),
+            Timeframe::Y1 => TimeDelta::days(365),
         }
     }
 }

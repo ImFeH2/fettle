@@ -34,7 +34,7 @@ pub enum AppError {
     Python(#[from] pyo3::PyErr),
 
     #[error("Strategy Error: {0}")]
-    Strategy(#[from] libloading::Error),
+    Strategy(String),
 
     #[error("Internal Error: {0}")]
     Internal(String),
@@ -120,15 +120,9 @@ impl IntoResponse for AppError {
     }
 }
 
-impl From<&str> for AppError {
-    fn from(msg: &str) -> Self {
-        AppError::Internal(msg.to_string())
-    }
-}
-
-impl From<String> for AppError {
-    fn from(msg: String) -> Self {
-        AppError::Internal(msg)
+impl From<MigrateError> for AppError {
+    fn from(err: MigrateError) -> Self {
+        AppError::Database(sqlx::Error::Migrate(Box::new(err)))
     }
 }
 
@@ -144,6 +138,24 @@ impl From<serde_json::Error> for AppError {
     }
 }
 
+impl From<libloading::Error> for AppError {
+    fn from(err: libloading::Error) -> Self {
+        AppError::Strategy(err.to_string())
+    }
+}
+
+impl From<&str> for AppError {
+    fn from(msg: &str) -> Self {
+        AppError::Internal(msg.to_string())
+    }
+}
+
+impl From<String> for AppError {
+    fn from(msg: String) -> Self {
+        AppError::Internal(msg)
+    }
+}
+
 impl From<TomlError> for AppError {
     fn from(err: TomlError) -> Self {
         AppError::Internal(err.to_string())
@@ -153,12 +165,6 @@ impl From<TomlError> for AppError {
 impl From<cargo_metadata::Error> for AppError {
     fn from(err: cargo_metadata::Error) -> Self {
         AppError::Internal(err.to_string())
-    }
-}
-
-impl From<MigrateError> for AppError {
-    fn from(err: MigrateError) -> Self {
-        AppError::Database(sqlx::Error::Migrate(Box::new(err)))
     }
 }
 

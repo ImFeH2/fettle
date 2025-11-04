@@ -1,15 +1,18 @@
 import { useEffect, useRef } from 'react'
-import { createChart, CandlestickSeries, type IChartApi, type ISeriesApi, type CandlestickData } from 'lightweight-charts'
+import { createChart, CandlestickSeries, createSeriesMarkers, type IChartApi, type ISeriesApi, type CandlestickData, type SeriesMarker, type Time, type ISeriesMarkersPluginApi } from 'lightweight-charts'
+import { formatChartTime } from '@/utils/time'
 
 interface CandlestickChartProps {
   data: CandlestickData[]
   symbol?: string
+  markers?: SeriesMarker<Time>[]
 }
 
-export default function CandlestickChart({ data, symbol }: CandlestickChartProps) {
+export default function CandlestickChart({ data, symbol, markers }: CandlestickChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
 
   useEffect(() => {
     if (!chartContainerRef.current) return
@@ -25,6 +28,9 @@ export default function CandlestickChart({ data, symbol }: CandlestickChartProps
       },
       width: chartContainerRef.current.clientWidth,
       height: 500,
+      localization: {
+        timeFormatter: (timestamp: number) => formatChartTime(timestamp),
+      },
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
@@ -61,6 +67,7 @@ export default function CandlestickChart({ data, symbol }: CandlestickChartProps
 
     chartRef.current = chart
     seriesRef.current = candlestickSeries
+    markersRef.current = createSeriesMarkers(candlestickSeries, [])
 
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
@@ -86,6 +93,16 @@ export default function CandlestickChart({ data, symbol }: CandlestickChartProps
       }
     }
   }, [data])
+
+  useEffect(() => {
+    if (seriesRef.current && markers) {
+      if (markersRef.current) {
+        markersRef.current.setMarkers(markers)
+      } else {
+        markersRef.current = createSeriesMarkers(seriesRef.current, markers)
+      }
+    }
+  }, [markers])
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">

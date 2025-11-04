@@ -1,5 +1,9 @@
 use crate::errors::{AppError, AppResult};
-use std::path::{Path, PathBuf};
+use bigdecimal::{BigDecimal, RoundingMode, Zero};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 pub fn safe_join(base_dir: &Path, path: &str) -> AppResult<PathBuf> {
     let path = path.trim().trim_start_matches('/');
@@ -34,4 +38,28 @@ pub fn safe_join(base_dir: &Path, path: &str) -> AppResult<PathBuf> {
     }
 
     Ok(canonical)
+}
+
+pub fn str_to_bigdecimal(value: &str, field_name: &str) -> AppResult<BigDecimal> {
+    BigDecimal::from_str(value).map_err(|_| format!("Invalid {}: {}", field_name, value).into())
+}
+
+pub fn round_down_to_precision(value: &BigDecimal, precision: &BigDecimal) -> BigDecimal {
+    if precision.is_zero() {
+        return value.clone();
+    }
+
+    let divided = value / precision;
+    let floored = divided.with_scale_round(0, RoundingMode::Down);
+    floored * precision
+}
+
+pub fn round_up_to_precision(value: &BigDecimal, precision: &BigDecimal) -> BigDecimal {
+    if precision.is_zero() {
+        return value.clone();
+    }
+
+    let divided = value / precision;
+    let ceiled = divided.with_scale_round(0, RoundingMode::Up);
+    ceiled * precision
 }

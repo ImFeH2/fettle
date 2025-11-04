@@ -1,14 +1,23 @@
+#[doc(hidden)]
 pub mod app;
+#[doc(hidden)]
 pub mod errors;
-mod exchange;
+#[doc(hidden)]
+pub mod exchange;
+#[doc(hidden)]
 pub mod handlers;
+#[doc(hidden)]
 pub mod models;
+#[doc(hidden)]
 pub mod services;
+#[doc(hidden)]
 pub mod strategy;
+#[doc(hidden)]
 pub mod tasks;
-mod utils;
+#[doc(hidden)]
+pub mod utils;
 
 pub use crate::errors::AppResult;
-pub use crate::models::{Candle, Timeframe};
-pub use crate::strategy::{Strategy, StrategyContext};
+pub use crate::models::{Candle, MarketPrecision, Timeframe, TradingFees};
+pub use crate::strategy::{Order, OrderType, Strategy, StrategyContext, Trade, TradeType};
 pub use strategy_macro::strategy;

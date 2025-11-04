@@ -1,7 +1,6 @@
 use crate::app::AppState;
 use crate::errors::ApiResult;
-use crate::models::candles::AvailableCandleInfo;
-use crate::models::{Candle, Timeframe};
+use crate::models::{AvailableCandleInfo, Candle, Timeframe};
 use crate::services;
 use axum::{
     Json,

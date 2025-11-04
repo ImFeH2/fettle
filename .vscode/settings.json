@@ -1,6 +1,0 @@
-{
-  "editor.formatOnSave": true,
-  "rust-analyzer.server.extraEnv": {
-    "DATABASE_URL": "postgres://merco:merco_password@localhost/merco"
-  }
-}

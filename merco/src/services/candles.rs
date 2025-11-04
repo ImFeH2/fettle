@@ -1,5 +1,5 @@
 use crate::errors::AppResult;
-use crate::models::{Candle, Timeframe, candles::AvailableCandleInfo};
+use crate::models::{Candle, Timeframe, AvailableCandleInfo};
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 

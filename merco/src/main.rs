@@ -1,6 +1,7 @@
 mod config;
 
-use merco::{AppResult, app, errors::AppError};
+use merco::app::create_app;
+use merco::errors::{AppError, AppResult};
 use sqlx::postgres::PgPoolOptions;
 use std::{
     net::{Ipv4Addr, SocketAddrV4},
@@ -33,7 +34,7 @@ async fn main() -> AppResult<()> {
     sqlx::migrate!("./migrations").run(&db_pool).await?;
 
     let token = CancellationToken::new();
-    let app = app::create_app(db_pool, token.clone());
+    let app = create_app(db_pool, token.clone());
 
     let Ok(host) = Ipv4Addr::from_str(&config.server.host) else {
         return Err(AppError::Internal(format!(

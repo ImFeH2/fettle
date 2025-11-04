@@ -1,20 +1,72 @@
-use merco::{AppResult, Strategy, StrategyContext, strategy};
-use serde_json::to_string;
+use bigdecimal::{BigDecimal, FromPrimitive, Zero};
+use merco::{strategy, AppResult, Candle, Strategy, StrategyContext};
 
 #[strategy]
-struct MyStrategy {}
+struct MovingAverageCrossStrategy {
+    // Add any fields you need for your strategy here
+    short_period: usize,
+    long_period: usize,
+    position_size_percent: BigDecimal,
+}
 
-impl Strategy for MyStrategy {
-    fn tick(&mut self, context: StrategyContext) -> AppResult<()> {
-        let candle = context.candle()?;
+impl Strategy for MovingAverageCrossStrategy {
+    // Called on every new candle
+    fn tick(&mut self, ctx: &mut StrategyContext) -> AppResult<()> {
+        let candles = ctx.candles();
 
-        println!("latest candle: {}", to_string(&candle)?);
+        if candles.len() < self.long_period {
+            return Ok(());
+        }
+
+        let short_ma = self.calculate_sma(candles, self.short_period);
+        let long_ma = self.calculate_sma(candles, self.long_period);
+
+        let prev_short_ma = self.calculate_sma_at(candles, self.short_period, 1);
+        let prev_long_ma = self.calculate_sma_at(candles, self.long_period, 1);
+
+        let balance = ctx.balance();
+        let position = ctx.position();
+
+        let golden_cross = prev_short_ma <= prev_long_ma && short_ma > long_ma;
+        let death_cross = prev_short_ma >= prev_long_ma && short_ma < long_ma;
+
+        if golden_cross && position.is_zero() {
+            let candle = ctx.candle()?;
+            let invest_amount = balance * &self.position_size_percent;
+            let buy_amount = invest_amount / &candle.close;
+
+            ctx.market_buy(&buy_amount)?;
+        }
+
+        if death_cross && !position.is_zero() {
+            ctx.market_sell(&position)?;
+        }
+
         Ok(())
     }
 }
 
-impl Default for MyStrategy {
+impl MovingAverageCrossStrategy {
+    fn calculate_sma(&self, candles: &[Candle], period: usize) -> BigDecimal {
+        self.calculate_sma_at(candles, period, 0)
+    }
+
+    fn calculate_sma_at(&self, candles: &[Candle], period: usize, offset: usize) -> BigDecimal {
+        let end = candles.len() - offset;
+        let start = end.saturating_sub(period);
+
+        let sum: BigDecimal = candles[start..end].iter().map(|c| &c.close).sum();
+
+        sum / BigDecimal::from_usize(period).unwrap()
+    }
+}
+
+impl Default for MovingAverageCrossStrategy {
     fn default() -> Self {
-        Self {}
+        Self {
+            short_period: 10,
+            long_period: 30,
+            position_size_percent: BigDecimal::from_f64(0.95).unwrap(),
+        }
     }
 }

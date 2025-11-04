@@ -1,30 +1,32 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Download, Search, Clock, CheckCircle, XCircle, Loader, BarChart3 } from 'lucide-react'
 import { api } from '@/services/api'
-import { useTaskStream } from '@/hooks/useTaskStream'
+import { useFetchCandlesStream } from '@/hooks/useFetchCandlesStream'
 import ComboBox from '@/components/ComboBox'
 import CandlestickChart from '@/components/CandlestickChart'
-import type { Timeframe, Task, AvailableCandleInfo, Candle } from '@/types'
+import type { Timeframe, FetchCandlesTask, AvailableCandleInfo, Candle } from '@/types'
 import type { CandlestickData } from 'lightweight-charts'
 
 export default function MarketData() {
   const [exchanges, setExchanges] = useState<string[]>([])
   const [selectedExchange, setSelectedExchange] = useState<string>('')
   const [symbols, setSymbols] = useState<string[]>([])
-  const [timeframes, setTimeframes] = useState<Record<Timeframe, string>>({} as Record<Timeframe, string>)
+  const [timeframes, setTimeframes] = useState<Timeframe[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(false)
 
   const [selectedSymbol, setSelectedSymbol] = useState<string>('')
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe | ''>('')
   const [creating, setCreating] = useState(false)
+  const creatingRef = useRef(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const [availableData, setAvailableData] = useState<AvailableCandleInfo[]>([])
   const [chartData, setChartData] = useState<CandlestickData[]>([])
   const [loadingChart, setLoadingChart] = useState(false)
   const [selectedData, setSelectedData] = useState<AvailableCandleInfo | null>(null)
 
-  const { tasks, connected } = useTaskStream()
+  const { tasks, connected } = useFetchCandlesStream()
 
   useEffect(() => {
     loadExchanges()
@@ -117,10 +119,18 @@ export default function MarketData() {
 
   const createFetchTask = async () => {
     if (!selectedSymbol || !selectedTimeframe) return
+    if (creatingRef.current) return
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    abortControllerRef.current = new AbortController()
 
     try {
+      creatingRef.current = true
       setCreating(true)
-      await api.tasks.createFetch({
+      await api.fetchCandles.create({
         exchange: selectedExchange,
         symbol: selectedSymbol,
         timeframe: selectedTimeframe,
@@ -129,7 +139,9 @@ export default function MarketData() {
     } catch (error) {
       console.error('Failed to create fetch task:', error)
     } finally {
+      creatingRef.current = false
       setCreating(false)
+      abortControllerRef.current = null
     }
   }
 
@@ -137,11 +149,9 @@ export default function MarketData() {
     symbol.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const fetchTasks = tasks.filter(
-    (task) => task.config.type === 'fetch_candles'
-  )
+  const fetchTasks = tasks
 
-  const getTaskStatusIcon = (task: Task) => {
+  const getTaskStatusIcon = (task: FetchCandlesTask) => {
     switch (task.status) {
       case 'pending':
         return <Clock className="w-4 h-4 text-gray-400" />
@@ -246,7 +256,7 @@ export default function MarketData() {
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-2">Timeframe</label>
                       <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                        {Object.entries(timeframes).map(([tf, label]) => (
+                        {timeframes.map((tf) => (
                           <button
                             key={tf}
                             onClick={() => setSelectedTimeframe(tf as Timeframe)}
@@ -255,7 +265,7 @@ export default function MarketData() {
                               : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                               }`}
                           >
-                            {label}
+                            {tf}
                           </button>
                         ))}
                       </div>
@@ -292,13 +302,12 @@ export default function MarketData() {
                     <button
                       key={`${info.exchange}-${info.symbol}-${info.timeframe}`}
                       onClick={() => loadChartData(info)}
-                      className={`w-full p-3 border rounded-lg text-left transition-colors ${
-                        selectedData?.exchange === info.exchange &&
+                      className={`w-full p-3 border rounded-lg text-left transition-colors ${selectedData?.exchange === info.exchange &&
                         selectedData?.symbol === info.symbol &&
                         selectedData?.timeframe === info.timeframe
-                          ? 'border-gray-900 bg-gray-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                        ? 'border-gray-900 bg-gray-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                        }`}
                     >
                       <p className="text-sm font-medium text-gray-900 truncate">
                         {info.symbol}
@@ -340,10 +349,10 @@ export default function MarketData() {
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">
-                            {task.config.symbol}
+                            {task.symbol}
                           </p>
                           <p className="text-xs text-gray-500">
-                            {task.config.exchange} · {task.config.timeframe}
+                            {task.exchange} · {task.timeframe}
                           </p>
                         </div>
                         {getTaskStatusIcon(task)}

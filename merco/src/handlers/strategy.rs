@@ -1,14 +1,8 @@
-use crate::{
-    app::AppState,
-    errors::ApiResult,
-    models::Timeframe,
-    strategy::{StrategyContext, context::BacktestContext},
-};
-use axum::{
-    Json,
-    extract::{Query, State},
-};
-use serde::Deserialize;
+use crate::{app::AppState, errors::ApiResult};
+use axum::{Json, extract::State};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use toml_edit::DocumentMut;
 use ts_rs::TS;
 
 #[derive(Debug, Clone, Deserialize, TS)]
@@ -27,28 +21,42 @@ pub async fn add_strategy(
     Ok(Json(()))
 }
 
-#[derive(Debug, Clone, Deserialize, TS)]
+#[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
-pub struct BacktestRequest {
-    pub name: String,
-    pub exchange: String,
-    pub symbol: String,
-    pub timeframe: Timeframe,
+pub struct ListStrategiesResponse {
+    pub strategies: Vec<String>,
 }
 
-pub async fn backtest(
-    State(state): State<AppState>,
-    Json(request): Json<BacktestRequest>,
-) -> ApiResult<()> {
-    let backtest_context = BacktestContext {
-        exchange: request.exchange,
-        symbol: request.symbol,
-        timeframe: request.timeframe,
-    };
+pub async fn list_strategies() -> ApiResult<ListStrategiesResponse> {
+    let current_dir = std::env::current_dir().map_err(|e| {
+        crate::errors::AppError::Internal(format!("Failed to get current dir: {}", e))
+    })?;
+    let workspace_toml_path = current_dir.join("strategies").join("Cargo.toml");
+    let content = fs::read_to_string(&workspace_toml_path).map_err(|e| {
+        crate::errors::AppError::Internal(format!(
+            "Failed to read Cargo.toml at {:?}: {}",
+            workspace_toml_path, e
+        ))
+    })?;
 
-    let context = StrategyContext::new(state.db_pool, backtest_context)?;
-    let strategy_manager = state.strategy_manager;
+    let doc: DocumentMut = content.parse().map_err(|e| {
+        crate::errors::AppError::Internal(format!("Failed to parse Cargo.toml: {}", e))
+    })?;
 
-    strategy_manager.backtest(&request.name, context)?;
-    Ok(Json(()))
+    let members = doc
+        .get("workspace")
+        .and_then(|w| w.get("members"))
+        .and_then(|m| m.as_array())
+        .ok_or_else(|| {
+            crate::errors::AppError::Internal(
+                "No workspace.members found in Cargo.toml".to_string(),
+            )
+        })?;
+
+    let strategies: Vec<String> = members
+        .iter()
+        .filter_map(|m| m.as_str().map(|s| s.to_string()))
+        .collect();
+
+    Ok(Json(ListStrategiesResponse { strategies }))
 }

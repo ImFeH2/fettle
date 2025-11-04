@@ -28,9 +28,9 @@ export const StrategyEditor = ({
   onSave,
 }: StrategyEditorProps) => {
   const editorRef = useRef<any>(null)
-  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const autoSaveTimerRef = useRef<number | null>(null)
 
-  const handleEditorDidMount = (editor: any, monaco: any) => {
+  const handleEditorDidMount = (editor: any) => {
     editorRef.current = editor
   }
 

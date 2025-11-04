@@ -3,7 +3,7 @@ import { ChevronRight, ChevronDown, File, Folder, FolderOpen } from 'lucide-reac
 import { api } from '@/services/api'
 import { FileContextMenu } from '@/components/FileContextMenu'
 import { CreateFileModal } from '@/components/CreateFileModal'
-import type { FileNode, FileNodeType } from '@/types'
+import type { FileNode } from '@/types'
 
 interface FileTreeProps {
   onFileSelect: (path: string, content: string) => void
