@@ -51,8 +51,8 @@ pub struct Order {
 }
 
 #[derive(Debug, Clone)]
-pub struct StrategyContext {
-    pub(crate) candles: Vec<Candle>,
+pub struct StrategyContext<'a> {
+    pub(crate) candles: &'a [Candle],
     pub(crate) balance: BigDecimal,
     pub(crate) position: BigDecimal,
     pub(crate) trades: Vec<Trade>,
@@ -61,14 +61,14 @@ pub struct StrategyContext {
     pub(crate) precision: MarketPrecision,
 }
 
-impl StrategyContext {
+impl StrategyContext<'_> {
     pub(crate) fn new(
         balance: BigDecimal,
         fees: TradingFees,
         precision: MarketPrecision,
     ) -> AppResult<Self> {
         Ok(Self {
-            candles: Vec::new(),
+            candles: &[],
             balance,
             position: BigDecimal::zero(),
             trades: Vec::new(),

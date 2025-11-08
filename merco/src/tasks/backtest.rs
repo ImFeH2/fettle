@@ -154,15 +154,15 @@ impl BacktestTask {
         let precision = ccxt.precision(&symbol)?;
         let mut context = StrategyContext::new(initial_capital.clone(), fees, precision)?;
 
-        for (index, candle) in all_candles.iter().cloned().enumerate() {
-            context.candles.push(candle);
+        for i in 0..all_candles.len() {
+            context.candles = &all_candles[0..=i];
 
             context.before()?;
             strategy_handle.tick(&mut context)?;
             context.after()?;
 
-            if index % BACKTEST_BROADCAST_INTERVAL == 0 {
-                let progress = 100.0 * ((index + 1) as f32) / (total_candles as f32);
+            if i % BACKTEST_BROADCAST_INTERVAL == 0 {
+                let progress = 100.0 * ((i + 1) as f32) / (total_candles as f32);
                 self.progress = progress;
                 self.updated_at = Utc::now();
                 self.broadcast();
