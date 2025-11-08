@@ -184,6 +184,8 @@ export default function Backtest() {
     switch (task.status) {
       case 'pending':
         return <Clock className="w-4 h-4 text-gray-400" />
+      case 'compiling':
+        return <Loader className="w-4 h-4 text-yellow-500 animate-spin" />
       case 'running':
         return <Loader className="w-4 h-4 text-blue-500 animate-spin" />
       case 'completed':
@@ -310,6 +312,12 @@ export default function Backtest() {
                           </div>
                           {getTaskStatusIcon(task)}
                         </div>
+
+                        {task.status === 'compiling' && (
+                          <div className="mt-2">
+                            <p className="text-xs text-yellow-600">Compiling strategy...</p>
+                          </div>
+                        )}
 
                         {task.status === 'running' && (
                           <div className="mt-2">

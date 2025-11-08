@@ -2,7 +2,7 @@ use crate::errors::AppResult;
 use crate::exchange::ccxt::CCXT;
 use crate::models::{Candle, MarketPrecision, Timeframe};
 use crate::services::candles::get_candles;
-use crate::strategy::{StrategyContext, StrategyHandle, Trade, TradeType};
+use crate::strategy::{StrategyContext, StrategyHandle, StrategyManager, Trade, TradeType};
 use bigdecimal::{BigDecimal, RoundingMode, ToPrimitive, Zero};
 use chrono::{DateTime, Utc, serde::ts_milliseconds, serde::ts_milliseconds_option};
 use serde::Serialize;
@@ -56,6 +56,7 @@ pub struct BacktestStatistic {
 #[ts(export)]
 pub enum BacktestStatus {
     Pending,
+    Compiling,
     Running,
     Completed,
     Failed,
@@ -98,14 +99,38 @@ impl BacktestTask {
         let _ = self.event_tx.send(self.clone());
     }
 
-    pub async fn execute(&mut self, db_pool: PgPool, strategy_handle: &mut StrategyHandle) {
+    pub async fn execute(
+        &mut self,
+        strategy_manager: &StrategyManager,
+        strategy_name: &str,
+        db_pool: PgPool,
+    ) {
+        let now = Utc::now();
+        self.status = BacktestStatus::Compiling;
+        self.started_at = Some(now);
+        self.updated_at = now;
+        self.broadcast();
+
+        let mut strategy_handle = match strategy_manager.load_strategy(strategy_name).await {
+            Ok(handle) => handle,
+            Err(e) => {
+                let now = Utc::now();
+                self.status = BacktestStatus::Failed;
+                self.error_message = Some(format!("Failed to load strategy: {}", e));
+                self.completed_at = Some(now);
+                self.updated_at = now;
+                self.broadcast();
+                return;
+            }
+        };
+
         let now = Utc::now();
         self.status = BacktestStatus::Running;
         self.started_at = Some(now);
         self.updated_at = now;
         self.broadcast();
 
-        let result = self.execute_backtest(db_pool, strategy_handle).await;
+        let result = self.execute_backtest(db_pool, &mut strategy_handle).await;
         let now = Utc::now();
         match result {
             Ok(statistic) => {

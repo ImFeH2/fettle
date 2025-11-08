@@ -1,7 +1,7 @@
 use crate::errors::AppResult;
 use crate::strategy::handle::StrategyHandle;
 use cargo_metadata::MetadataCommand;
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, process::Stdio};
 use toml_edit::{DocumentMut, array, table, value};
 
 const WORKSPACE_CARGO_TOML: &str = include_str!(concat!(
@@ -109,14 +109,17 @@ impl StrategyManager {
             .find(|p| p.name == strategy_name)
             .ok_or(format!("Package '{}' not found", strategy_name))?;
 
-        let status = tokio::process::Command::new("cargo")
+        let output = tokio::process::Command::new("cargo")
             .args(["build", "--release", "--package", strategy_name])
             .current_dir(&self.workspace_dir)
-            .status()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
             .await?;
 
-        if !status.success() {
-            return Err("Build failed".into());
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Build failed: {}", stderr).into());
         }
 
         let target_dir = metadata.target_directory.as_std_path();

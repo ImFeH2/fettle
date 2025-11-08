@@ -1,5 +1,6 @@
 use crate::app::AppState;
 use crate::errors::{ApiResult, AppError};
+use crate::exchange::ccxt::CCXT;
 use crate::models::Timeframe;
 use crate::tasks::{BacktestStatus, BacktestTask};
 use axum::{
@@ -37,9 +38,7 @@ pub async fn create_task(
     State(state): State<AppState>,
     Json(request): Json<CreateBacktestTaskRequest>,
 ) -> ApiResult<CreateBacktestTaskResponse> {
-    let mut strategy_handle = state.strategy_manager.load_strategy(&request.name).await?;
-
-    let ccxt = crate::exchange::ccxt::CCXT::with_exchange(&request.exchange)?;
+    let ccxt = CCXT::with_exchange(&request.exchange)?;
     let precision = ccxt.precision(&request.symbol)?;
 
     let now = Utc::now();
@@ -70,10 +69,10 @@ pub async fn create_task(
         tasks.insert(task_id, task.clone());
     }
 
-    let db_pool = state.db_pool.clone();
     tokio::spawn(async move {
         let mut task = task.write().await;
-        task.execute(db_pool, &mut strategy_handle).await;
+        task.execute(&state.strategy_manager, &request.name, state.db_pool)
+            .await;
     });
 
     Ok(Json(CreateBacktestTaskResponse { task_id }))
