@@ -2,11 +2,11 @@ use crate::errors::{AppError, AppResult};
 use crate::models::{Candle, MarketPrecision, TradingFees};
 use bigdecimal::{BigDecimal, RoundingMode, Zero};
 use chrono::{DateTime, Utc, serde::ts_milliseconds};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export)]
 pub enum TradeType {
@@ -16,7 +16,7 @@ pub enum TradeType {
     LimitSell,
 }
 
-#[derive(Debug, Clone, Serialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct Trade {
     #[serde(with = "ts_milliseconds")]
@@ -33,7 +33,7 @@ pub struct Trade {
     pub profit: Option<BigDecimal>,
 }
 
-#[derive(Debug, Clone, Serialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export)]
 pub enum OrderType {

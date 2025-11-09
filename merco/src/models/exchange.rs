@@ -1,5 +1,5 @@
 use bigdecimal::{BigDecimal, RoundingMode, Zero};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 #[derive(Debug, Clone)]
@@ -8,7 +8,7 @@ pub struct TradingFees {
     pub taker: BigDecimal,
 }
 
-#[derive(Debug, Clone, Serialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct MarketPrecision {
     #[ts(type = "string")]

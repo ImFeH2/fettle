@@ -34,7 +34,7 @@ async fn main() -> AppResult<()> {
     sqlx::migrate!("./migrations").run(&db_pool).await?;
 
     let token = CancellationToken::new();
-    let app = create_app(db_pool, token.clone());
+    let app = create_app(db_pool, token.clone()).await?;
 
     let Ok(host) = Ipv4Addr::from_str(&config.server.host) else {
         return Err(AppError::Internal(format!(

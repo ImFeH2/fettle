@@ -1,3 +1,5 @@
+use crate::AppResult;
+use crate::services::tasks::{load_backtest_tasks, load_fetch_candles_tasks};
 use crate::tasks::{BacktestTask, FetchCandlesTask};
 use crate::{handlers, strategy::StrategyManager};
 use axum::{
@@ -23,18 +25,32 @@ pub struct AppState {
     pub shutdown_token: CancellationToken,
 }
 
-pub fn create_app(db_pool: PgPool, shutdown_token: CancellationToken) -> Router {
+pub async fn create_app(db_pool: PgPool, shutdown_token: CancellationToken) -> AppResult<Router> {
     let (fetch_candles_event_tx, _) = broadcast::channel(1000);
-    let fetch_candles_tasks = Arc::new(RwLock::new(HashMap::new()));
+    let mut fetch_candles_tasks = HashMap::new();
+    let loaded_fetch_candles_tasks = load_fetch_candles_tasks(&db_pool).await?;
+    for task in loaded_fetch_candles_tasks {
+        let task_id = task.id;
+        let task = Arc::new(RwLock::new(task));
+        fetch_candles_tasks.insert(task_id, task);
+    }
+
     let (backtest_event_tx, _) = broadcast::channel(1000);
-    let backtest_tasks = Arc::new(RwLock::new(HashMap::new()));
+    let mut backtest_tasks = HashMap::new();
+    let loaded_backtest_tasks = load_backtest_tasks(&db_pool).await?;
+    for task in loaded_backtest_tasks {
+        let task_id = task.id;
+        let task = Arc::new(RwLock::new(task));
+        backtest_tasks.insert(task_id, task);
+    }
+
     let strategy_manager = StrategyManager::new().expect("Failed to create StrategyManager");
 
     let state = AppState {
         fetch_candles_event_tx,
-        fetch_candles_tasks,
+        fetch_candles_tasks: Arc::new(RwLock::new(fetch_candles_tasks)),
         backtest_event_tx,
-        backtest_tasks,
+        backtest_tasks: Arc::new(RwLock::new(backtest_tasks)),
         strategy_manager,
         db_pool,
         shutdown_token,
@@ -45,7 +61,7 @@ pub fn create_app(db_pool: PgPool, shutdown_token: CancellationToken) -> Router 
         .allow_methods(Any)
         .allow_headers(Any);
 
-    Router::new()
+    Ok(Router::new()
         .route("/health", get(handlers::info::check))
         .route("/exchanges", get(handlers::info::list_exchanges))
         .route("/symbols", get(handlers::info::list_symbols))
@@ -79,5 +95,5 @@ pub fn create_app(db_pool: PgPool, shutdown_token: CancellationToken) -> Router 
         )
         .route("/strategy/source/move", get(handlers::source::move_source))
         .layer(cors)
-        .with_state(state)
+        .with_state(state))
 }

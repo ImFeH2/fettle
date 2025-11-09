@@ -2,10 +2,11 @@ use crate::errors::AppResult;
 use crate::exchange::ccxt::CCXT;
 use crate::models::{Candle, MarketPrecision, Timeframe};
 use crate::services::candles::get_candles;
+use crate::services::tasks::save_backtest_task;
 use crate::strategy::{StrategyContext, StrategyHandle, StrategyManager, Trade, TradeType};
 use bigdecimal::{BigDecimal, RoundingMode, ToPrimitive, Zero};
 use chrono::{DateTime, Utc, serde::ts_milliseconds, serde::ts_milliseconds_option};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tokio::sync::broadcast;
 use ts_rs::TS;
@@ -13,7 +14,7 @@ use uuid::Uuid;
 
 const BACKTEST_BROADCAST_INTERVAL: usize = 100;
 
-#[derive(Debug, Clone, Serialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct BacktestStatistic {
     pub trades: Vec<Trade>,
@@ -51,7 +52,7 @@ pub struct BacktestStatistic {
     pub largest_loss: BigDecimal,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export)]
 pub enum BacktestStatus {
@@ -62,7 +63,7 @@ pub enum BacktestStatus {
     Failed,
 }
 
-#[derive(Debug, Clone, Serialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct BacktestTask {
     pub id: Uuid,
@@ -91,12 +92,14 @@ pub struct BacktestTask {
     pub updated_at: DateTime<Utc>,
     #[serde(skip)]
     #[ts(skip)]
-    pub event_tx: broadcast::Sender<BacktestTask>,
+    pub event_tx: Option<broadcast::Sender<BacktestTask>>,
 }
 
 impl BacktestTask {
     pub fn broadcast(&self) {
-        let _ = self.event_tx.send(self.clone());
+        if let Some(tx) = &self.event_tx {
+            let _ = tx.send(self.clone());
+        }
     }
 
     pub async fn execute(
@@ -130,7 +133,7 @@ impl BacktestTask {
         self.updated_at = now;
         self.broadcast();
 
-        let result = self.execute_backtest(db_pool, &mut strategy_handle).await;
+        let result = self.execute_backtest(&db_pool, &mut strategy_handle).await;
         let now = Utc::now();
         match result {
             Ok(statistic) => {
@@ -149,11 +152,15 @@ impl BacktestTask {
         };
 
         self.broadcast();
+
+        save_backtest_task(&db_pool, self)
+            .await
+            .expect("Failed to save backtest task");
     }
 
     async fn execute_backtest(
         &mut self,
-        db_pool: PgPool,
+        db_pool: &PgPool,
         strategy_handle: &mut StrategyHandle,
     ) -> AppResult<BacktestStatistic> {
         let exchange = self.exchange.clone();
@@ -167,7 +174,7 @@ impl BacktestTask {
             timeframe
         );
 
-        let all_candles = get_candles(&db_pool, &exchange, &symbol, timeframe, None, None).await?;
+        let all_candles = get_candles(db_pool, &exchange, &symbol, timeframe, None, None).await?;
         let total_candles = all_candles.len();
         if total_candles == 0 {
             return Err("No candles available for backtest".into());

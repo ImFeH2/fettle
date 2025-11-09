@@ -57,7 +57,7 @@ pub async fn create_task(
         started_at: None,
         completed_at: None,
         updated_at: now,
-        event_tx: state.backtest_event_tx.clone(),
+        event_tx: Some(state.backtest_event_tx.clone()),
     };
     task.broadcast();
 

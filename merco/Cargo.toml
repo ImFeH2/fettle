@@ -18,7 +18,7 @@ pyo3 = { version = "0.27", features = ["auto-initialize"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 strategy-macro = { path = "../strategy-macro" }
-sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "bigdecimal", "chrono", "macros", "migrate", "postgres"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "bigdecimal", "chrono", "macros", "migrate", "postgres", "uuid"] }
 thiserror = "2.0"
 tokio = { version = "1.47", features = ["full"] }
 tokio-util = "0.7"

@@ -50,7 +50,7 @@ pub async fn create_task(
         started_at: None,
         completed_at: None,
         updated_at: now,
-        event_tx: state.fetch_candles_event_tx.clone(),
+        event_tx: Some(state.fetch_candles_event_tx.clone()),
     };
 
     let task_id = task.id;

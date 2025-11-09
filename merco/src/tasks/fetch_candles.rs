@@ -1,16 +1,16 @@
-use crate::errors::AppResult;
 use crate::exchange::ccxt::CCXT;
 use crate::models::Timeframe;
 use crate::services::candles;
+use crate::{errors::AppResult, services::tasks::save_fetch_candles_task};
 use bigdecimal::ToPrimitive;
 use chrono::{DateTime, Utc, serde::ts_milliseconds, serde::ts_milliseconds_option};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tokio::sync::broadcast;
 use ts_rs::TS;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct FetchCandlesResult {
     pub symbol: String,
@@ -19,7 +19,7 @@ pub struct FetchCandlesResult {
     pub records: u64,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export)]
 pub enum FetchCandlesStatus {
@@ -29,7 +29,7 @@ pub enum FetchCandlesStatus {
     Failed,
 }
 
-#[derive(Debug, Clone, Serialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct FetchCandlesTask {
     pub id: Uuid,
@@ -56,12 +56,14 @@ pub struct FetchCandlesTask {
     pub updated_at: DateTime<Utc>,
     #[serde(skip)]
     #[ts(skip)]
-    pub event_tx: broadcast::Sender<FetchCandlesTask>,
+    pub event_tx: Option<broadcast::Sender<FetchCandlesTask>>,
 }
 
 impl FetchCandlesTask {
     pub fn broadcast(&self) {
-        let _ = self.event_tx.send(self.clone());
+        if let Some(tx) = &self.event_tx {
+            let _ = tx.send(self.clone());
+        }
     }
 
     pub async fn execute(&mut self, db_pool: PgPool) {
@@ -71,7 +73,7 @@ impl FetchCandlesTask {
         self.updated_at = now;
         self.broadcast();
 
-        let result = self.execute_fetch(db_pool).await;
+        let result = self.execute_fetch(&db_pool).await;
         let now = Utc::now();
         match result {
             Ok(fetch_result) => {
@@ -89,9 +91,13 @@ impl FetchCandlesTask {
             }
         }
         self.broadcast();
+
+        save_fetch_candles_task(&db_pool, self)
+            .await
+            .expect("Failed to save fetch candles task");
     }
 
-    async fn execute_fetch(&mut self, db_pool: PgPool) -> AppResult<FetchCandlesResult> {
+    async fn execute_fetch(&mut self, db_pool: &PgPool) -> AppResult<FetchCandlesResult> {
         let exchange = self.exchange.clone();
         let symbol = self.symbol.clone();
         let timeframe = self.timeframe;
@@ -108,7 +114,7 @@ impl FetchCandlesTask {
         let timeframe_ms = timeframe.to_ms();
         let timeframe_delta = timeframe.to_delta();
         let mut next_since =
-            match candles::get_latest_candle(&db_pool, &exchange, &symbol, timeframe).await? {
+            match candles::get_latest_candle(db_pool, &exchange, &symbol, timeframe).await? {
                 Some(latest_candle) => latest_candle.timestamp + timeframe_delta,
                 None => {
                     let first_candle = ccxt.first_candle(&symbol, timeframe)?;
@@ -150,7 +156,7 @@ impl FetchCandlesTask {
                 break;
             };
 
-            candles::insert_candles(&db_pool, &epoch).await?;
+            candles::insert_candles(db_pool, &epoch).await?;
 
             next_since = latest.timestamp + timeframe_delta;
             count += epoch.len() as u64;
