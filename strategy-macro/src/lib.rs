@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{DeriveInput, parse_macro_input};
+use syn::{parse_macro_input, DeriveInput};
 
 #[proc_macro_attribute]
 pub fn strategy(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -14,7 +14,7 @@ pub fn strategy(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #input
 
         #[unsafe(no_mangle)]
-        pub fn #func_name() -> *mut dyn ::merco::Strategy {
+        pub fn #func_name() -> *mut dyn ::thoth::Strategy {
             let strategy = <#name as ::std::default::Default>::default();
             Box::into_raw(Box::new(strategy))
         }

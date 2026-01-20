@@ -1,7 +1,7 @@
 mod config;
 
-use merco::app::create_app;
-use merco::errors::{AppError, AppResult};
+use thoth::app::create_app;
+use thoth::errors::{AppError, AppResult};
 use sqlx::postgres::PgPoolOptions;
 use std::{
     net::{Ipv4Addr, SocketAddrV4},

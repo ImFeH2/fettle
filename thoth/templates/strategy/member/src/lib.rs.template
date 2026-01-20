@@ -1,5 +1,5 @@
 use bigdecimal::{BigDecimal, FromPrimitive, Zero};
-use merco::{strategy, AppResult, Candle, Strategy, StrategyContext};
+use thoth::{strategy, AppResult, Candle, Strategy, StrategyContext};
 
 #[strategy]
 struct MyStrategy {

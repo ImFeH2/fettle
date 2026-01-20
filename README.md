@@ -1,4 +1,4 @@
-# Merco
+# Thoth
 
 A high-performance algorithmic trading platform built with Rust and React.
 
@@ -22,8 +22,8 @@ A high-performance algorithmic trading platform built with Rust and React.
 
 ```bash
 # 1. Clone and setup environment
-git clone https://github.com/ImFeH2/merco.git
-cd merco
+git clone https://github.com/ImFeH2/thoth.git
+cd thoth
 
 # 2. Start database (if using Docker)
 cd docker/
@@ -46,7 +46,7 @@ Visit `http://localhost:5173`
 Strategies are written as Rust structs implementing the `Strategy` trait:
 
 ```rust
-use merco::{strategy, AppResult, Strategy, StrategyContext};
+use thoth::{strategy, AppResult, Strategy, StrategyContext};
 
 #[strategy]
 struct MyStrategy {

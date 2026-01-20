@@ -5,5 +5,5 @@ host = "127.0.0.1"
 port = 3001
 
 [database]
-url = "postgres://merco:merco_password@localhost/merco"
+url = "postgres://thoth:thoth_password@localhost/thoth"
 max_connections = 20
