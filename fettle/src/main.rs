@@ -1,7 +1,7 @@
 mod config;
 
-use thoth::app::create_app;
-use thoth::errors::{AppError, AppResult};
+use fettle::app::create_app;
+use fettle::errors::{AppError, AppResult};
 use sqlx::postgres::PgPoolOptions;
 use std::{
     net::{Ipv4Addr, SocketAddrV4},

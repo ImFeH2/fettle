@@ -14,7 +14,7 @@ pub fn strategy(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #input
 
         #[unsafe(no_mangle)]
-        pub fn #func_name() -> *mut dyn ::thoth::Strategy {
+        pub fn #func_name() -> *mut dyn ::fettle::Strategy {
             let strategy = <#name as ::std::default::Default>::default();
             Box::into_raw(Box::new(strategy))
         }

@@ -23,7 +23,7 @@ export default function Navbar({ activeTab, onTabChange }: NavbarProps) {
             <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-white" strokeWidth={2} />
             </div>
-            <span className="text-lg font-medium text-gray-900">Thoth</span>
+            <span className="text-lg font-medium text-gray-900">Fettle</span>
           </div>
 
           <div className="flex gap-1">

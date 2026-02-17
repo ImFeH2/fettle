@@ -1,4 +1,4 @@
-# Thoth
+# Fettle
 
 A high-performance algorithmic trading platform built with Rust and React.
 
@@ -22,8 +22,8 @@ A high-performance algorithmic trading platform built with Rust and React.
 
 ```bash
 # 1. Clone and setup environment
-git clone https://github.com/ImFeH2/thoth.git
-cd thoth
+git clone https://github.com/ImFeH2/fettle.git
+cd fettle
 
 # 2. Start database (if using Docker)
 cd docker
@@ -31,7 +31,7 @@ docker compose up -d
 cd ..
 
 # 3. Run Database Migrations
-cd thoth
+cd fettle
 sqlx migrate run
 cd ..
 
@@ -51,7 +51,7 @@ Visit `http://localhost:5173`
 Strategies are written as Rust structs implementing the `Strategy` trait:
 
 ```rust
-use thoth::{strategy, AppResult, Strategy, StrategyContext};
+use fettle::{strategy, AppResult, Strategy, StrategyContext};
 
 #[strategy]
 struct MyStrategy {

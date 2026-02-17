@@ -2131,7 +2131,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "thoth"
+name = "fettle"
 version = "0.1.0"
 dependencies = [
  "async-stream",

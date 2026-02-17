@@ -1,18 +1,18 @@
 services:
   timescaledb:
     image: timescale/timescaledb:latest-pg16
-    container_name: thoth_timescaledb
+    container_name: fettle_timescaledb
     restart: unless-stopped
     environment:
-      POSTGRES_USER: thoth
-      POSTGRES_PASSWORD: thoth_password
-      POSTGRES_DB: thoth
+      POSTGRES_USER: fettle
+      POSTGRES_PASSWORD: fettle_password
+      POSTGRES_DB: fettle
     ports:
       - "5432:5432"
     volumes:
       - timescale_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U thoth" ]
+      test: [ "CMD-SHELL", "pg_isready -U fettle" ]
       interval: 30s
       timeout: 10s
       retries: 5
