@@ -5,7 +5,7 @@ import { useFetchCandlesStream } from '@/hooks/useFetchCandlesStream'
 import ComboBox from '@/components/ComboBox'
 import CandlestickChart from '@/components/CandlestickChart'
 import type { Timeframe, FetchCandlesTask, AvailableCandleInfo, Candle } from '@/types'
-import type { CandlestickData } from 'lightweight-charts'
+import type { CandlestickData, Time } from 'lightweight-charts'
 
 export default function MarketData() {
   const [exchanges, setExchanges] = useState<string[]>([])
@@ -67,10 +67,8 @@ export default function MarketData() {
       if (symbolsData.length > 0) {
         setSelectedSymbol(symbolsData[0])
       }
-
-      const tfKeys = Object.keys(timeframesData) as Timeframe[]
-      if (tfKeys.length > 0) {
-        setSelectedTimeframe(tfKeys[0])
+      if (timeframesData.length > 0) {
+        setSelectedTimeframe(timeframesData[0])
       }
     } catch (error) {
       console.error('Failed to load exchange data:', error)
@@ -102,7 +100,7 @@ export default function MarketData() {
       })
 
       const formattedData: CandlestickData[] = candles.map((candle: Candle) => ({
-        time: (candle.timestamp / 1000) as any,
+        time: (candle.timestamp / 1000) as Time,
         open: parseFloat(candle.open),
         high: parseFloat(candle.high),
         low: parseFloat(candle.low),
