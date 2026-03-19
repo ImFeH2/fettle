@@ -3,7 +3,9 @@ use crate::strategy::STRATEGY_WORKDIR_NAME;
 use crate::utils::safe_join;
 use axum::{Json, extract::Query};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use tokio::fs;
+use toml_edit::{DocumentMut, array, table};
 use ts_rs::TS;
 
 #[derive(Debug, Clone, Deserialize, TS)]
@@ -160,6 +162,9 @@ pub async fn delete_source(Query(query): Query<DeleteSourceQuery>) -> ApiResult<
     let current_dir = std::env::current_dir()?;
     let base_dir = current_dir.join(STRATEGY_WORKDIR_NAME).canonicalize()?;
     let full_path = safe_join(&base_dir, &query.path)?;
+    let relative_path = full_path
+        .strip_prefix(&base_dir)
+        .map_err(|_| AppError::BadRequest("Access denied: path outside workspace".to_string()))?;
 
     if !full_path.exists() {
         return Err(AppError::NotFound("Path does not exist".to_string()));
@@ -171,14 +176,85 @@ pub async fn delete_source(Query(query): Query<DeleteSourceQuery>) -> ApiResult<
         ));
     }
 
+    if relative_path == Path::new("Cargo.toml") {
+        return Err(AppError::BadRequest(
+            "Cannot delete the workspace Cargo.toml".to_string(),
+        ));
+    }
+
     let metadata = fs::metadata(&full_path).await?;
     if metadata.is_dir() {
-        fs::remove_dir_all(&full_path).await?;
+        let original_workspace_toml = if relative_path.components().count() == 1 {
+            Some(std::fs::read_to_string(base_dir.join("Cargo.toml"))?)
+        } else {
+            None
+        };
+
+        if let Some(strategy_name) = relative_path.to_str().filter(|_| relative_path.components().count() == 1) {
+            remove_strategy_member(&base_dir, strategy_name)?;
+        }
+
+        if let Err(err) = fs::remove_dir_all(&full_path).await {
+            if let Some(original_workspace_toml) = original_workspace_toml {
+                let _ = std::fs::write(base_dir.join("Cargo.toml"), original_workspace_toml);
+            }
+            return Err(err.into());
+        }
     } else if metadata.is_file() {
         fs::remove_file(&full_path).await?;
     }
 
     Ok(Json(()))
+}
+
+fn remove_strategy_member(base_dir: &Path, strategy_name: &str) -> Result<bool, AppError> {
+    let workspace_toml_path = base_dir.join("Cargo.toml");
+    let mut workspace_toml: DocumentMut = std::fs::read_to_string(&workspace_toml_path)?.parse()?;
+    let members = workspace_toml["workspace"].or_insert(table())["members"]
+        .or_insert(array())
+        .as_array_mut()
+        .unwrap();
+
+    let Some(member_index) = members
+        .iter()
+        .position(|member| member.as_str() == Some(strategy_name))
+    else {
+        return Ok(false);
+    };
+
+    members.remove(member_index);
+    std::fs::write(&workspace_toml_path, workspace_toml.to_string())?;
+
+    Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::remove_strategy_member;
+
+    #[test]
+    fn removes_strategy_member_from_workspace_manifest() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let workspace_dir = std::env::temp_dir().join(format!("fettle-source-test-{}", unique));
+
+        std::fs::create_dir_all(&workspace_dir).unwrap();
+        std::fs::write(
+            workspace_dir.join("Cargo.toml"),
+            "[workspace]\nresolver = \"3\"\nmembers = [\"alpha\", \"beta\"]\n",
+        )
+        .unwrap();
+
+        assert!(remove_strategy_member(&workspace_dir, "alpha").unwrap());
+
+        let workspace_toml = std::fs::read_to_string(workspace_dir.join("Cargo.toml")).unwrap();
+        assert!(!workspace_toml.contains("\"alpha\""));
+        assert!(workspace_toml.contains("\"beta\""));
+
+        std::fs::remove_dir_all(workspace_dir).unwrap();
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, TS)]
