@@ -24,6 +24,24 @@ pub struct StrategyManager {
 }
 
 impl StrategyManager {
+    fn validate_strategy_name(strategy_name: &str) -> AppResult<()> {
+        if strategy_name.is_empty() {
+            return Err("Strategy name cannot be empty".into());
+        }
+
+        if !strategy_name
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-' || byte == b'_')
+        {
+            return Err(
+                "Strategy name can only contain lowercase letters, digits, hyphens, and underscores"
+                    .into(),
+            );
+        }
+
+        Ok(())
+    }
+
     pub fn new() -> AppResult<Self> {
         let current_dir = std::env::current_dir()?;
         let workspace_dir = current_dir.join(STRATEGY_WORKDIR_NAME);
@@ -56,6 +74,8 @@ impl StrategyManager {
     }
 
     pub fn add_strategy(&self, strategy_name: &str) -> AppResult<()> {
+        Self::validate_strategy_name(strategy_name)?;
+
         let workspace_toml_path = self.workspace_dir.join("Cargo.toml");
         let mut workspace_toml: DocumentMut = fs::read_to_string(&workspace_toml_path)?.parse()?;
 
@@ -140,5 +160,23 @@ impl StrategyManager {
         }
 
         StrategyHandle::try_from_path(&lib_path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StrategyManager;
+
+    #[test]
+    fn accepts_valid_strategy_name() {
+        assert!(StrategyManager::validate_strategy_name("my-strategy_1").is_ok());
+    }
+
+    #[test]
+    fn rejects_invalid_strategy_name() {
+        assert!(StrategyManager::validate_strategy_name("../escape").is_err());
+        assert!(StrategyManager::validate_strategy_name("bad/name").is_err());
+        assert!(StrategyManager::validate_strategy_name("BadName").is_err());
+        assert!(StrategyManager::validate_strategy_name("bad name").is_err());
     }
 }
