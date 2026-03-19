@@ -500,6 +500,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "fettle"
+version = "0.1.0"
+dependencies = [
+ "async-stream",
+ "async-trait",
+ "axum",
+ "bigdecimal",
+ "cargo_metadata",
+ "chrono",
+ "config",
+ "futures",
+ "include_dir",
+ "libloading",
+ "pyo3",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strategy-macro",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "toml_edit",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "ts-rs",
+ "uuid",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2128,36 +2158,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "fettle"
-version = "0.1.0"
-dependencies = [
- "async-stream",
- "async-trait",
- "axum",
- "bigdecimal",
- "cargo_metadata",
- "chrono",
- "config",
- "futures",
- "include_dir",
- "libloading",
- "pyo3",
- "serde",
- "serde_json",
- "sqlx",
- "strategy-macro",
- "thiserror",
- "tokio",
- "tokio-util",
- "toml_edit",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "ts-rs",
- "uuid",
 ]
 
 [[package]]
