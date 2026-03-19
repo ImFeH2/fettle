@@ -70,9 +70,13 @@ pub async fn create_task(
     }
 
     tokio::spawn(async move {
-        let mut task = task.write().await;
-        task.execute(&state.strategy_manager, &request.name, state.db_pool)
-            .await;
+        BacktestTask::run(
+            task,
+            state.strategy_manager,
+            request.name,
+            state.db_pool,
+        )
+        .await;
     });
 
     Ok(Json(CreateBacktestTaskResponse { task_id }))

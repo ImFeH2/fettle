@@ -63,8 +63,7 @@ pub async fn create_task(
 
     let db_pool = state.db_pool.clone();
     tokio::spawn(async move {
-        let mut task = task.write().await;
-        task.execute(db_pool).await;
+        FetchCandlesTask::run(task, db_pool).await;
     });
 
     Ok(Json(CreateFetchCandlesTaskResponse { task_id }))

@@ -6,7 +6,8 @@ use bigdecimal::ToPrimitive;
 use chrono::{DateTime, Utc, serde::ts_milliseconds, serde::ts_milliseconds_option};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use tokio::sync::broadcast;
+use std::sync::Arc;
+use tokio::sync::{RwLock, broadcast};
 use ts_rs::TS;
 use uuid::Uuid;
 
@@ -60,48 +61,75 @@ pub struct FetchCandlesTask {
 }
 
 impl FetchCandlesTask {
+    async fn update<F>(task: &Arc<RwLock<Self>>, update: F)
+    where
+        F: FnOnce(&mut Self),
+    {
+        let mut task = task.write().await;
+        update(&mut task);
+        task.broadcast();
+    }
+
     pub fn broadcast(&self) {
         if let Some(tx) = &self.event_tx {
             let _ = tx.send(self.clone());
         }
     }
 
-    pub async fn execute(&mut self, db_pool: PgPool) {
+    pub async fn run(task: Arc<RwLock<Self>>, db_pool: PgPool) {
         let now = Utc::now();
-        self.status = FetchCandlesStatus::Running;
-        self.started_at = Some(now);
-        self.updated_at = now;
-        self.broadcast();
+        Self::update(&task, |task| {
+            task.status = FetchCandlesStatus::Running;
+            task.started_at = Some(now);
+            task.updated_at = now;
+        })
+        .await;
 
-        let result = self.execute_fetch(&db_pool).await;
+        let task_snapshot = task.read().await.clone();
+        let result = Self::execute_fetch(
+            &task,
+            &db_pool,
+            &task_snapshot.exchange,
+            &task_snapshot.symbol,
+            task_snapshot.timeframe,
+        )
+        .await;
         let now = Utc::now();
         match result {
             Ok(fetch_result) => {
-                self.status = FetchCandlesStatus::Completed;
-                self.progress = 100.0;
-                self.result = Some(fetch_result);
-                self.completed_at = Some(now);
-                self.updated_at = now;
+                Self::update(&task, |task| {
+                    task.status = FetchCandlesStatus::Completed;
+                    task.progress = 100.0;
+                    task.result = Some(fetch_result);
+                    task.completed_at = Some(now);
+                    task.updated_at = now;
+                })
+                .await;
             }
             Err(e) => {
-                self.status = FetchCandlesStatus::Failed;
-                self.error_message = Some(e.to_string());
-                self.completed_at = Some(now);
-                self.updated_at = now;
+                Self::update(&task, |task| {
+                    task.status = FetchCandlesStatus::Failed;
+                    task.error_message = Some(e.to_string());
+                    task.completed_at = Some(now);
+                    task.updated_at = now;
+                })
+                .await;
             }
         }
-        self.broadcast();
 
-        save_fetch_candles_task(&db_pool, self)
+        let task_snapshot = task.read().await.clone();
+        save_fetch_candles_task(&db_pool, &task_snapshot)
             .await
             .expect("Failed to save fetch candles task");
     }
 
-    async fn execute_fetch(&mut self, db_pool: &PgPool) -> AppResult<FetchCandlesResult> {
-        let exchange = self.exchange.clone();
-        let symbol = self.symbol.clone();
-        let timeframe = self.timeframe;
-
+    async fn execute_fetch(
+        task: &Arc<RwLock<Self>>,
+        db_pool: &PgPool,
+        exchange: &str,
+        symbol: &str,
+        timeframe: Timeframe,
+    ) -> AppResult<FetchCandlesResult> {
         tracing::info!(
             "Fetching candles data for {} on {} with timeframe {}",
             symbol,
@@ -145,9 +173,12 @@ impl FetchCandlesTask {
         let total = (time_diff_ms + timeframe_ms - 1) / timeframe_ms;
         let mut progress = 0.0;
 
-        self.progress = progress;
-        self.updated_at = Utc::now();
-        self.broadcast();
+        let now = Utc::now();
+        Self::update(task, |task| {
+            task.progress = progress;
+            task.updated_at = now;
+        })
+        .await;
 
         loop {
             let next_since_ms = next_since.timestamp_millis();
@@ -162,14 +193,17 @@ impl FetchCandlesTask {
             count += epoch.len() as u64;
             progress = 100.0 * (count as f32) / (total as f32);
 
-            self.progress = progress;
-            self.updated_at = Utc::now();
-            self.broadcast();
+            let now = Utc::now();
+            Self::update(task, |task| {
+                task.progress = progress;
+                task.updated_at = now;
+            })
+            .await;
         }
 
         Ok(FetchCandlesResult {
-            symbol,
-            exchange,
+            symbol: symbol.to_string(),
+            exchange: exchange.to_string(),
             timeframe,
             records: total,
         })

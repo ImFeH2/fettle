@@ -8,7 +8,8 @@ use bigdecimal::{BigDecimal, RoundingMode, ToPrimitive, Zero};
 use chrono::{DateTime, Utc, serde::ts_milliseconds, serde::ts_milliseconds_option};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use tokio::sync::broadcast;
+use std::sync::Arc;
+use tokio::sync::{RwLock, broadcast};
 use ts_rs::TS;
 use uuid::Uuid;
 
@@ -96,77 +97,111 @@ pub struct BacktestTask {
 }
 
 impl BacktestTask {
+    async fn update<F>(task: &Arc<RwLock<Self>>, update: F)
+    where
+        F: FnOnce(&mut Self),
+    {
+        let mut task = task.write().await;
+        update(&mut task);
+        task.broadcast();
+    }
+
     pub fn broadcast(&self) {
         if let Some(tx) = &self.event_tx {
             let _ = tx.send(self.clone());
         }
     }
 
-    pub async fn execute(
-        &mut self,
-        strategy_manager: &StrategyManager,
-        strategy_name: &str,
+    pub async fn run(
+        task: Arc<RwLock<Self>>,
+        strategy_manager: StrategyManager,
+        strategy_name: String,
         db_pool: PgPool,
     ) {
         let now = Utc::now();
-        self.status = BacktestStatus::Compiling;
-        self.started_at = Some(now);
-        self.updated_at = now;
-        self.broadcast();
+        Self::update(&task, |task| {
+            task.status = BacktestStatus::Compiling;
+            task.started_at = Some(now);
+            task.updated_at = now;
+        })
+        .await;
 
-        let mut strategy_handle = match strategy_manager.load_strategy(strategy_name).await {
+        let mut strategy_handle = match strategy_manager.load_strategy(&strategy_name).await {
             Ok(handle) => handle,
             Err(e) => {
                 let now = Utc::now();
-                self.status = BacktestStatus::Failed;
-                self.error_message = Some(format!("Failed to load strategy: {}", e));
-                self.completed_at = Some(now);
-                self.updated_at = now;
-                self.broadcast();
+                Self::update(&task, |task| {
+                    task.status = BacktestStatus::Failed;
+                    task.error_message = Some(format!("Failed to load strategy: {}", e));
+                    task.completed_at = Some(now);
+                    task.updated_at = now;
+                })
+                .await;
+
+                let task_snapshot = task.read().await.clone();
+                save_backtest_task(&db_pool, &task_snapshot)
+                    .await
+                    .expect("Failed to save backtest task");
                 return;
             }
         };
 
         let now = Utc::now();
-        self.status = BacktestStatus::Running;
-        self.started_at = Some(now);
-        self.updated_at = now;
-        self.broadcast();
+        Self::update(&task, |task| {
+            task.status = BacktestStatus::Running;
+            task.started_at = Some(now);
+            task.updated_at = now;
+        })
+        .await;
 
-        let result = self.execute_backtest(&db_pool, &mut strategy_handle).await;
+        let task_snapshot = task.read().await.clone();
+        let result = Self::execute_backtest(
+            &task,
+            &db_pool,
+            &mut strategy_handle,
+            &task_snapshot.exchange,
+            &task_snapshot.symbol,
+            task_snapshot.timeframe,
+        )
+        .await;
+
         let now = Utc::now();
         match result {
             Ok(statistic) => {
-                self.status = BacktestStatus::Completed;
-                self.progress = 100.0;
-                self.statistic = Some(statistic);
-                self.completed_at = Some(now);
-                self.updated_at = now;
+                Self::update(&task, |task| {
+                    task.status = BacktestStatus::Completed;
+                    task.progress = 100.0;
+                    task.statistic = Some(statistic);
+                    task.completed_at = Some(now);
+                    task.updated_at = now;
+                })
+                .await;
             }
             Err(e) => {
-                self.status = BacktestStatus::Failed;
-                self.error_message = Some(e.to_string());
-                self.completed_at = Some(now);
-                self.updated_at = now;
+                Self::update(&task, |task| {
+                    task.status = BacktestStatus::Failed;
+                    task.error_message = Some(e.to_string());
+                    task.completed_at = Some(now);
+                    task.updated_at = now;
+                })
+                .await;
             }
         };
 
-        self.broadcast();
-
-        save_backtest_task(&db_pool, self)
+        let task_snapshot = task.read().await.clone();
+        save_backtest_task(&db_pool, &task_snapshot)
             .await
             .expect("Failed to save backtest task");
     }
 
     async fn execute_backtest(
-        &mut self,
+        task: &Arc<RwLock<Self>>,
         db_pool: &PgPool,
         strategy_handle: &mut StrategyHandle,
+        exchange: &str,
+        symbol: &str,
+        timeframe: Timeframe,
     ) -> AppResult<BacktestStatistic> {
-        let exchange = self.exchange.clone();
-        let symbol = self.symbol.clone();
-        let timeframe = self.timeframe;
-
         tracing::info!(
             "Running backtest on {}/{} with timeframe {}",
             exchange,
@@ -195,16 +230,22 @@ impl BacktestTask {
 
             if i % BACKTEST_BROADCAST_INTERVAL == 0 {
                 let progress = 100.0 * ((i + 1) as f32) / (total_candles as f32);
-                self.progress = progress;
-                self.updated_at = Utc::now();
-                self.broadcast();
+                let now = Utc::now();
+                Self::update(task, |task| {
+                    task.progress = progress;
+                    task.updated_at = now;
+                })
+                .await;
             }
         }
 
         context.end()?;
-        self.progress = 100.0;
-        self.updated_at = Utc::now();
-        self.broadcast();
+        let now = Utc::now();
+        Self::update(task, |task| {
+            task.progress = 100.0;
+            task.updated_at = now;
+        })
+        .await;
 
         let backtest_stat = Self::calculate_backtest_statistic(
             initial_capital,
