@@ -79,17 +79,16 @@ impl StrategyManager {
         let workspace_toml_path = self.workspace_dir.join("Cargo.toml");
         let mut workspace_toml: DocumentMut = fs::read_to_string(&workspace_toml_path)?.parse()?;
 
-        let members = workspace_toml["workspace"].or_insert(table())["members"]
-            .or_insert(array())
-            .as_array_mut()
-            .unwrap();
+        {
+            let members = workspace_toml["workspace"].or_insert(table())["members"]
+                .or_insert(array())
+                .as_array_mut()
+                .unwrap();
 
-        if members.iter().any(|m| m.as_str().unwrap() == strategy_name) {
-            return Err("Strategy exist".into());
+            if members.iter().any(|m| m.as_str().unwrap() == strategy_name) {
+                return Err("Strategy exist".into());
+            }
         }
-
-        members.push(strategy_name);
-        fs::write(workspace_toml_path, workspace_toml.to_string())?;
 
         let strategy_dir = self.workspace_dir.join(strategy_name);
         if strategy_dir.exists() {
@@ -98,22 +97,38 @@ impl StrategyManager {
 
         fs::create_dir_all(&strategy_dir)?;
 
-        let mut cargo_toml: DocumentMut = MEMBER_CARGO_TOML.parse()?;
-        cargo_toml["package"]["name"] = value(strategy_name);
+        let result = (|| -> AppResult<()> {
+            let mut cargo_toml: DocumentMut = MEMBER_CARGO_TOML.parse()?;
+            cargo_toml["package"]["name"] = value(strategy_name);
 
-        let dependency_fettle = cargo_toml["dependencies"]["fettle"]
-            .as_inline_table_mut()
-            .unwrap();
-        dependency_fettle.insert("path", env!("CARGO_MANIFEST_DIR").into());
+            let dependency_fettle = cargo_toml["dependencies"]["fettle"]
+                .as_inline_table_mut()
+                .unwrap();
+            dependency_fettle.insert("path", env!("CARGO_MANIFEST_DIR").into());
 
-        let cargo_path = strategy_dir.join("Cargo.toml");
-        fs::write(cargo_path, cargo_toml.to_string())?;
+            let cargo_path = strategy_dir.join("Cargo.toml");
+            fs::write(cargo_path, cargo_toml.to_string())?;
 
-        let src_dir = strategy_dir.join("src");
-        fs::create_dir_all(&src_dir)?;
+            let src_dir = strategy_dir.join("src");
+            fs::create_dir_all(&src_dir)?;
 
-        let lib_path = src_dir.join("lib.rs");
-        fs::write(lib_path, MEMBER_LIB_RS)?;
+            let lib_path = src_dir.join("lib.rs");
+            fs::write(lib_path, MEMBER_LIB_RS)?;
+
+            workspace_toml["workspace"].or_insert(table())["members"]
+                .or_insert(array())
+                .as_array_mut()
+                .unwrap()
+                .push(strategy_name);
+            fs::write(&workspace_toml_path, workspace_toml.to_string())?;
+
+            Ok(())
+        })();
+
+        if let Err(err) = result {
+            let _ = fs::remove_dir_all(&strategy_dir);
+            return Err(err);
+        }
 
         Ok(())
     }
@@ -178,5 +193,34 @@ mod tests {
         assert!(StrategyManager::validate_strategy_name("bad/name").is_err());
         assert!(StrategyManager::validate_strategy_name("BadName").is_err());
         assert!(StrategyManager::validate_strategy_name("bad name").is_err());
+    }
+
+    #[test]
+    fn keeps_workspace_manifest_clean_when_strategy_directory_exists() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let workspace_dir =
+            std::env::temp_dir().join(format!("fettle-strategy-manager-test-{}", unique));
+
+        std::fs::create_dir_all(&workspace_dir).unwrap();
+        std::fs::write(
+            workspace_dir.join("Cargo.toml"),
+            "[workspace]\nresolver = \"3\"\nmembers = []\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(workspace_dir.join("existing")).unwrap();
+
+        let manager = StrategyManager {
+            workspace_dir: workspace_dir.clone(),
+        };
+
+        assert!(manager.add_strategy("existing").is_err());
+
+        let workspace_toml = std::fs::read_to_string(workspace_dir.join("Cargo.toml")).unwrap();
+        assert!(workspace_toml.contains("members = []"));
+
+        std::fs::remove_dir_all(workspace_dir).unwrap();
     }
 }
