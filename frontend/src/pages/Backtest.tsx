@@ -7,7 +7,7 @@ import { useBacktestStream } from '@/hooks/useBacktestStream'
 import ComboBox from '@/components/ComboBox'
 import BacktestResult from '@/components/BacktestResult'
 import type { Timeframe, BacktestTask, AvailableCandleInfo, Candle, Trade } from '@/types'
-import type { CandlestickData, SeriesMarker, Time } from 'lightweight-charts'
+import type { CandlestickData, HistogramData, SeriesMarker, Time } from 'lightweight-charts'
 import { formatTimestamp } from '@/utils/time'
 
 export default function Backtest() {
@@ -25,6 +25,7 @@ export default function Backtest() {
   const [tradeMarkers, setTradeMarkers] = useState<SeriesMarker<Time>[]>([])
   const [tradeMarkerDetails, setTradeMarkerDetails] = useState<ChartMarkerDetail[]>([])
   const [chartData, setChartData] = useState<CandlestickData[]>([])
+  const [volumeData, setVolumeData] = useState<HistogramData<Time>[]>([])
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [loadedChartTaskId, setLoadedChartTaskId] = useState<string | null>(null)
   const [loadingChart, setLoadingChart] = useState(false)
@@ -188,7 +189,18 @@ export default function Backtest() {
         low: Number(candle.low),
         close: Number(candle.close),
       }))
+      const volumeData: HistogramData<Time>[] = candles.map((candle: Candle) => {
+        const open = Number(candle.open)
+        const close = Number(candle.close)
+
+        return {
+          time: (candle.timestamp / 1000) as Time,
+          value: Number(candle.volume),
+          color: close >= open ? '#86efac' : '#fca5a5',
+        }
+      })
       setChartData(chartData)
+      setVolumeData(volumeData)
       setLoadedChartTaskId(task.id)
     } catch (error) {
       console.error('Failed to load chart data:', error)
@@ -210,10 +222,11 @@ export default function Backtest() {
 
   useEffect(() => {
     if (selectedTaskId && selectedTaskId !== loadedChartTaskId && !loadingChartRef.current) {
-      const task = tasks.find(t => t.id === selectedTaskId)
+        const task = tasks.find(t => t.id === selectedTaskId)
       if (task && task.status === 'completed' && task.statistic) {
         const markerData = convertTradesToMarkers(task.statistic.trades)
         setChartData([])
+        setVolumeData([])
         setTradeMarkers(markerData.markers)
         setTradeMarkerDetails(markerData.details)
         loadChartForTask(task)
@@ -460,6 +473,7 @@ export default function Backtest() {
                     <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
                       <CandlestickChart
                         data={chartData}
+                        volumeData={volumeData}
                         symbol={`${task.symbol} (${task.exchange} - ${task.timeframe})`}
                         markers={tradeMarkers}
                         markerDetails={tradeMarkerDetails}

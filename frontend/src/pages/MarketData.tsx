@@ -6,7 +6,7 @@ import { useFetchCandlesStream } from '@/hooks/useFetchCandlesStream'
 import ComboBox from '@/components/ComboBox'
 import CandlestickChart from '@/components/CandlestickChart'
 import type { Timeframe, FetchCandlesTask, AvailableCandleInfo, Candle } from '@/types'
-import type { CandlestickData, Time } from 'lightweight-charts'
+import type { CandlestickData, HistogramData, Time } from 'lightweight-charts'
 
 export default function MarketData() {
   const settings = useAppSettings()
@@ -25,6 +25,7 @@ export default function MarketData() {
 
   const [availableData, setAvailableData] = useState<AvailableCandleInfo[]>([])
   const [chartData, setChartData] = useState<CandlestickData[]>([])
+  const [volumeData, setVolumeData] = useState<HistogramData<Time>[]>([])
   const [loadingChart, setLoadingChart] = useState(false)
   const [selectedData, setSelectedData] = useState<AvailableCandleInfo | null>(null)
 
@@ -48,7 +49,19 @@ export default function MarketData() {
         close: parseFloat(candle.close),
       }))
 
+      const formattedVolume: HistogramData<Time>[] = candles.map((candle: Candle) => {
+        const open = parseFloat(candle.open)
+        const close = parseFloat(candle.close)
+
+        return {
+          time: (candle.timestamp / 1000) as Time,
+          value: parseFloat(candle.volume),
+          color: close >= open ? '#86efac' : '#fca5a5',
+        }
+      })
+
       setChartData(formattedData)
+      setVolumeData(formattedVolume)
     } catch (error) {
       console.error('Failed to load chart data:', error)
     } finally {
@@ -222,6 +235,7 @@ export default function MarketData() {
             {selectedData ? (
               <CandlestickChart
                 data={chartData}
+                volumeData={volumeData}
                 symbol={`${selectedData.symbol} (${selectedData.exchange} - ${selectedData.timeframe})`}
                 loading={loadingChart}
                 timeframeOptions={chartTimeframes}

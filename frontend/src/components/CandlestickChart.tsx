@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { createChart, CandlestickSeries, LineSeries, createSeriesMarkers, type IChartApi, type ISeriesApi, type CandlestickData, type LineData, type MouseEventHandler, type SeriesMarker, type Time, type ISeriesMarkersPluginApi } from 'lightweight-charts'
+import { createChart, CandlestickSeries, HistogramSeries, LineSeries, createSeriesMarkers, type HistogramData, type IChartApi, type ISeriesApi, type CandlestickData, type LineData, type MouseEventHandler, type SeriesMarker, type Time, type ISeriesMarkersPluginApi } from 'lightweight-charts'
 import { Loader2, Minus, Plus, RotateCcw } from 'lucide-react'
 import { formatChartTime } from '@/utils/time'
 import type { Timeframe } from '@/types'
 
 interface CandlestickChartProps {
   data: CandlestickData[]
+  volumeData?: HistogramData<Time>[]
   symbol?: string
   markers?: SeriesMarker<Time>[]
   markerDetails?: ChartMarkerDetail[]
@@ -114,6 +115,7 @@ function buildMovingAverageData(
 
 export default function CandlestickChart({
   data,
+  volumeData = [],
   symbol,
   markers,
   markerDetails = [],
@@ -127,9 +129,11 @@ export default function CandlestickChart({
   const chartSurfaceRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
   const indicatorSeriesRef = useRef(new Map<IndicatorId, ISeriesApi<'Line'>>())
   const [enabledIndicators, setEnabledIndicators] = useState<IndicatorId[]>([])
+  const [showVolume, setShowVolume] = useState(true)
   const [markerTooltip, setMarkerTooltip] = useState<{
     detail: ChartMarkerDetail
     left: number
@@ -222,8 +226,25 @@ export default function CandlestickChart({
       wickDownColor: '#ef4444',
     })
 
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      priceFormat: {
+        type: 'volume',
+      },
+      priceScaleId: '',
+      lastValueVisible: false,
+      priceLineVisible: false,
+    })
+
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins: {
+        top: 0.78,
+        bottom: 0,
+      },
+    })
+
     chartRef.current = chart
     seriesRef.current = candlestickSeries
+    volumeSeriesRef.current = volumeSeries
     markersRef.current = createSeriesMarkers(candlestickSeries, [])
     const indicatorSeries = indicatorSeriesRef.current
 
@@ -252,6 +273,25 @@ export default function CandlestickChart({
       }
     }
   }, [data])
+
+  useEffect(() => {
+    if (!volumeSeriesRef.current) {
+      return
+    }
+
+    if (showVolume && volumeData.length > 0) {
+      volumeSeriesRef.current.applyOptions({
+        visible: true,
+      })
+      volumeSeriesRef.current.setData(volumeData)
+      return
+    }
+
+    volumeSeriesRef.current.applyOptions({
+      visible: false,
+    })
+    volumeSeriesRef.current.setData([])
+  }, [showVolume, volumeData])
 
   useEffect(() => {
     if (seriesRef.current && markers) {
@@ -378,6 +418,17 @@ export default function CandlestickChart({
 
             {data.length > 0 && (
               <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowVolume((prev) => !prev)}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${showVolume
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900'
+                    }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  Volume
+                </button>
                 <button
                   type="button"
                   onClick={() => adjustZoom(1.25)}
