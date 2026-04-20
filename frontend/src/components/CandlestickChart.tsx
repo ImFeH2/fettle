@@ -266,11 +266,14 @@ export default function CandlestickChart({
   }, [])
 
   useEffect(() => {
-    if (seriesRef.current && data.length > 0) {
-      seriesRef.current.setData(data)
-      if (chartRef.current) {
-        chartRef.current.timeScale().fitContent()
-      }
+    if (!seriesRef.current) {
+      return
+    }
+
+    seriesRef.current.setData(data)
+
+    if (chartRef.current && data.length > 0) {
+      chartRef.current.timeScale().fitContent()
     }
   }, [data])
 
@@ -491,11 +494,11 @@ export default function CandlestickChart({
         </div>
       )}
 
-      <div ref={chartSurfaceRef} className="relative">
-        <div ref={chartContainerRef} className="w-full" />
+      <div ref={chartSurfaceRef} className="relative h-[500px]">
+        <div ref={chartContainerRef} className="w-full h-full" />
 
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/75 backdrop-blur-sm rounded-lg">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/85 backdrop-blur-sm rounded-lg">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm">
               <Loader2 className="w-4 h-4 animate-spin" />
               Loading chart
@@ -536,8 +539,8 @@ export default function CandlestickChart({
       </div>
 
       {data.length === 0 && !loading && (
-        <div className="flex items-center justify-center h-[500px] text-sm text-gray-500">
-          No data available
+        <div className="mt-4 flex items-center justify-center text-sm text-gray-500">
+          No chart data available
         </div>
       )}
     </div>
