@@ -1,5 +1,5 @@
-import { useEffect, useRef, type ReactNode } from 'react'
-import { createChart, CandlestickSeries, createSeriesMarkers, type IChartApi, type ISeriesApi, type CandlestickData, type SeriesMarker, type Time, type ISeriesMarkersPluginApi } from 'lightweight-charts'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createChart, CandlestickSeries, LineSeries, createSeriesMarkers, type IChartApi, type ISeriesApi, type CandlestickData, type LineData, type SeriesMarker, type Time, type ISeriesMarkersPluginApi } from 'lightweight-charts'
 import { Loader2 } from 'lucide-react'
 import { formatChartTime } from '@/utils/time'
 import type { Timeframe } from '@/types'
@@ -13,6 +13,84 @@ interface CandlestickChartProps {
   activeTimeframe?: Timeframe | ''
   onTimeframeChange?: (timeframe: Timeframe) => void
   controls?: ReactNode
+}
+
+const indicatorConfigs = [
+  {
+    id: 'ma20',
+    label: 'MA 20',
+    color: '#f59e0b',
+    activeClassName: 'border-amber-300 bg-amber-50 text-amber-700',
+  },
+  {
+    id: 'ma50',
+    label: 'MA 50',
+    color: '#f97316',
+    activeClassName: 'border-orange-300 bg-orange-50 text-orange-700',
+  },
+  {
+    id: 'ema20',
+    label: 'EMA 20',
+    color: '#3b82f6',
+    activeClassName: 'border-blue-300 bg-blue-50 text-blue-700',
+  },
+  {
+    id: 'ema50',
+    label: 'EMA 50',
+    color: '#8b5cf6',
+    activeClassName: 'border-violet-300 bg-violet-50 text-violet-700',
+  },
+] as const
+
+type IndicatorId = (typeof indicatorConfigs)[number]['id']
+
+function buildMovingAverageData(
+  data: CandlestickData[],
+  period: number,
+  mode: 'simple' | 'exponential'
+): LineData<Time>[] {
+  if (data.length < period) {
+    return []
+  }
+
+  const closes = data.map((item) => item.close)
+  const result: LineData<Time>[] = []
+
+  if (mode === 'simple') {
+    let rollingSum = closes.slice(0, period).reduce((sum, value) => sum + value, 0)
+    result.push({
+      time: data[period - 1].time,
+      value: rollingSum / period,
+    })
+
+    for (let index = period; index < closes.length; index += 1) {
+      rollingSum += closes[index] - closes[index - period]
+      result.push({
+        time: data[index].time,
+        value: rollingSum / period,
+      })
+    }
+
+    return result
+  }
+
+  const multiplier = 2 / (period + 1)
+  let previous = closes.slice(0, period).reduce((sum, value) => sum + value, 0) / period
+
+  result.push({
+    time: data[period - 1].time,
+    value: previous,
+  })
+
+  for (let index = period; index < closes.length; index += 1) {
+    previous = (closes[index] - previous) * multiplier + previous
+    result.push({
+      time: data[index].time,
+      value: previous,
+    })
+  }
+
+  return result
 }
 
 export default function CandlestickChart({
@@ -29,6 +107,16 @@ export default function CandlestickChart({
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
+  const indicatorSeriesRef = useRef(new Map<IndicatorId, ISeriesApi<'Line'>>())
+  const [enabledIndicators, setEnabledIndicators] = useState<IndicatorId[]>([])
+
+  const toggleIndicator = useCallback((indicatorId: IndicatorId) => {
+    setEnabledIndicators((prev) =>
+      prev.includes(indicatorId)
+        ? prev.filter((item) => item !== indicatorId)
+        : [...prev, indicatorId]
+    )
+  }, [])
 
   useEffect(() => {
     if (!chartContainerRef.current) return
@@ -84,6 +172,7 @@ export default function CandlestickChart({
     chartRef.current = chart
     seriesRef.current = candlestickSeries
     markersRef.current = createSeriesMarkers(candlestickSeries, [])
+    const indicatorSeries = indicatorSeriesRef.current
 
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
@@ -97,6 +186,7 @@ export default function CandlestickChart({
 
     return () => {
       window.removeEventListener('resize', handleResize)
+      indicatorSeries.clear()
       chart.remove()
     }
   }, [])
@@ -119,6 +209,45 @@ export default function CandlestickChart({
       }
     }
   }, [markers])
+
+  useEffect(() => {
+    const chart = chartRef.current
+    if (!chart) {
+      return
+    }
+
+    indicatorConfigs.forEach((config) => {
+      const existingSeries = indicatorSeriesRef.current.get(config.id)
+      const isEnabled = enabledIndicators.includes(config.id)
+
+      if (!isEnabled) {
+        if (existingSeries) {
+          chart.removeSeries(existingSeries)
+          indicatorSeriesRef.current.delete(config.id)
+        }
+        return
+      }
+
+      const period = Number(config.id.slice(2))
+      const mode = config.id.startsWith('ema') ? 'exponential' : 'simple'
+      const indicatorData = buildMovingAverageData(data, period, mode)
+
+      if (!existingSeries) {
+        const nextSeries = chart.addSeries(LineSeries, {
+          color: config.color,
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false,
+        })
+        nextSeries.setData(indicatorData)
+        indicatorSeriesRef.current.set(config.id, nextSeries)
+        return
+      }
+
+      existingSeries.setData(indicatorData)
+    })
+  }, [data, enabledIndicators])
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -146,6 +275,32 @@ export default function CandlestickChart({
                     {timeframe}
                   </button>
                 ))}
+              </div>
+            )}
+
+            {data.length > 0 && (
+              <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+                {indicatorConfigs.map((indicator) => {
+                  const isEnabled = enabledIndicators.includes(indicator.id)
+
+                  return (
+                    <button
+                      key={indicator.id}
+                      type="button"
+                      onClick={() => toggleIndicator(indicator.id)}
+                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${isEnabled
+                        ? indicator.activeClassName
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900'
+                        }`}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: indicator.color }}
+                      />
+                      {indicator.label}
+                    </button>
+                  )
+                })}
               </div>
             )}
 
