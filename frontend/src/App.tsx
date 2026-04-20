@@ -4,8 +4,6 @@ import Navbar from '@/components/Navbar'
 import MarketData from '@/pages/MarketData'
 import Strategy from '@/pages/Strategy'
 import Backtest from '@/pages/Backtest'
-import Optimization from '@/pages/Optimization'
-import Live from '@/pages/Live'
 import Settings from '@/pages/Settings'
 
 function App() {
@@ -18,8 +16,6 @@ function App() {
         {activeTab === 'market' && <MarketData />}
         {activeTab === 'strategy' && <Strategy />}
         {activeTab === 'backtest' && <Backtest />}
-        {activeTab === 'optimization' && <Optimization />}
-        {activeTab === 'live' && <Live />}
         {activeTab === 'settings' && <Settings />}
       </main>
       <Toaster

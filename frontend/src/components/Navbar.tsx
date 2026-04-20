@@ -9,8 +9,6 @@ const tabs = [
   { id: 'market', label: 'Market Data' },
   { id: 'strategy', label: 'Strategy' },
   { id: 'backtest', label: 'Backtest' },
-  { id: 'optimization', label: 'Optimization' },
-  { id: 'live', label: 'Live' },
   { id: 'settings', label: 'Settings' },
 ]
 
