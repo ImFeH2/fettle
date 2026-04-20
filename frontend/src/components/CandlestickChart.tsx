@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { createChart, CandlestickSeries, HistogramSeries, LineSeries, createSeriesMarkers, type HistogramData, type IChartApi, type ISeriesApi, type CandlestickData, type LineData, type MouseEventHandler, type SeriesMarker, type Time, type ISeriesMarkersPluginApi } from 'lightweight-charts'
+import { createChart, CandlestickSeries, HistogramSeries, LineSeries, createSeriesMarkers, type HistogramData, type IChartApi, type ISeriesApi, type CandlestickData, type LineData, type MouseEventHandler, type MouseEventParams, type SeriesMarker, type Time, type ISeriesMarkersPluginApi } from 'lightweight-charts'
 import { Loader2, Minus, Plus, RotateCcw } from 'lucide-react'
+import { ChartDrawingPrimitive, createDrawingId, getDrawingLabel, type ChartDrawing, type DraftDrawing, type DrawingPoint, type DrawingTool } from '@/components/chartDrawings'
 import { formatChartTime } from '@/utils/time'
 import type { Timeframe } from '@/types'
 
@@ -63,6 +64,30 @@ const indicatorConfigs = [
 ] as const
 
 type IndicatorId = (typeof indicatorConfigs)[number]['id']
+type DraftableDrawingTool = Exclude<DrawingTool, 'select' | 'horizontalLine'>
+
+const drawingToolConfigs = [
+  {
+    id: 'select',
+    label: 'Pointer',
+    activeClassName: 'border-gray-900 bg-gray-900 text-white',
+  },
+  {
+    id: 'trendLine',
+    label: 'Trend Line',
+    activeClassName: 'border-blue-300 bg-blue-50 text-blue-700',
+  },
+  {
+    id: 'horizontalLine',
+    label: 'Horizontal Line',
+    activeClassName: 'border-orange-300 bg-orange-50 text-orange-700',
+  },
+  {
+    id: 'range',
+    label: 'Range Box',
+    activeClassName: 'border-teal-300 bg-teal-50 text-teal-700',
+  },
+] as const
 
 function buildMovingAverageData(
   data: CandlestickData[],
@@ -132,13 +157,154 @@ export default function CandlestickChart({
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
   const indicatorSeriesRef = useRef(new Map<IndicatorId, ISeriesApi<'Line'>>())
+  const drawingPrimitiveRef = useRef(new ChartDrawingPrimitive())
+  const drawingsRef = useRef<ChartDrawing[]>([])
+  const selectedDrawingIdRef = useRef<string | null>(null)
+  const draftDrawingRef = useRef<DraftDrawing | null>(null)
+  const activeDrawingToolRef = useRef<DrawingTool>('select')
+  const markerDetailsRef = useRef(markerDetails)
   const [enabledIndicators, setEnabledIndicators] = useState<IndicatorId[]>([])
   const [showVolume, setShowVolume] = useState(true)
+  const [activeDrawingTool, setActiveDrawingTool] = useState<DrawingTool>('select')
+  const [drawings, setDrawings] = useState<ChartDrawing[]>([])
+  const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null)
+  const [draftKind, setDraftKind] = useState<DraftableDrawingTool | null>(null)
   const [markerTooltip, setMarkerTooltip] = useState<{
     detail: ChartMarkerDetail
     left: number
     top: number
   } | null>(null)
+
+  const syncDrawingPrimitive = useCallback((
+    nextDrawings: ChartDrawing[] = drawingsRef.current,
+    nextSelectedDrawingId: string | null = selectedDrawingIdRef.current,
+    nextDraftDrawing: DraftDrawing | null = draftDrawingRef.current
+  ) => {
+    drawingPrimitiveRef.current.setState(nextDrawings, nextSelectedDrawingId, nextDraftDrawing)
+  }, [])
+
+  const updateDrawings = useCallback((
+    nextDrawings: ChartDrawing[] | ((previous: ChartDrawing[]) => ChartDrawing[])
+  ) => {
+    const resolvedDrawings = typeof nextDrawings === 'function'
+      ? nextDrawings(drawingsRef.current)
+      : nextDrawings
+
+    drawingsRef.current = resolvedDrawings
+    setDrawings(resolvedDrawings)
+    syncDrawingPrimitive(resolvedDrawings)
+
+    return resolvedDrawings
+  }, [syncDrawingPrimitive])
+
+  const updateSelectedDrawingId = useCallback((nextSelectedDrawingId: string | null) => {
+    selectedDrawingIdRef.current = nextSelectedDrawingId
+    setSelectedDrawingId(nextSelectedDrawingId)
+    syncDrawingPrimitive(drawingsRef.current, nextSelectedDrawingId)
+  }, [syncDrawingPrimitive])
+
+  const clearDraftDrawing = useCallback(() => {
+    draftDrawingRef.current = null
+    setDraftKind(null)
+    syncDrawingPrimitive(drawingsRef.current, selectedDrawingIdRef.current, null)
+  }, [syncDrawingPrimitive])
+
+  const beginDraftDrawing = useCallback((tool: DraftableDrawingTool, point: DrawingPoint) => {
+    const nextDraftDrawing: DraftDrawing = {
+      id: createDrawingId(tool),
+      kind: tool,
+      start: point,
+      end: point,
+    }
+
+    draftDrawingRef.current = nextDraftDrawing
+    setDraftKind(tool)
+    syncDrawingPrimitive(drawingsRef.current, selectedDrawingIdRef.current, nextDraftDrawing)
+  }, [syncDrawingPrimitive])
+
+  const updateDraftDrawingPreview = useCallback((point: DrawingPoint) => {
+    const currentDraftDrawing = draftDrawingRef.current
+
+    if (!currentDraftDrawing) {
+      return
+    }
+
+    const nextDraftDrawing: DraftDrawing = {
+      ...currentDraftDrawing,
+      end: point,
+    }
+
+    draftDrawingRef.current = nextDraftDrawing
+    syncDrawingPrimitive(drawingsRef.current, selectedDrawingIdRef.current, nextDraftDrawing)
+  }, [syncDrawingPrimitive])
+
+  const finalizeDraftDrawing = useCallback((point: DrawingPoint) => {
+    const currentDraftDrawing = draftDrawingRef.current
+
+    if (!currentDraftDrawing) {
+      return
+    }
+
+    const completedDrawing: ChartDrawing = {
+      ...currentDraftDrawing,
+      end: point,
+    }
+
+    const nextDrawings = [...drawingsRef.current, completedDrawing]
+    drawingsRef.current = nextDrawings
+    setDrawings(nextDrawings)
+    selectedDrawingIdRef.current = completedDrawing.id
+    setSelectedDrawingId(completedDrawing.id)
+    draftDrawingRef.current = null
+    setDraftKind(null)
+    syncDrawingPrimitive(nextDrawings, completedDrawing.id, null)
+  }, [syncDrawingPrimitive])
+
+  const removeSelectedDrawing = useCallback(() => {
+    const currentSelectedDrawingId = selectedDrawingIdRef.current
+
+    if (!currentSelectedDrawingId) {
+      return
+    }
+
+    const nextDrawings = drawingsRef.current.filter((drawing) => drawing.id !== currentSelectedDrawingId)
+    drawingsRef.current = nextDrawings
+    setDrawings(nextDrawings)
+    selectedDrawingIdRef.current = null
+    setSelectedDrawingId(null)
+    syncDrawingPrimitive(nextDrawings, null)
+  }, [syncDrawingPrimitive])
+
+  const clearDrawings = useCallback(() => {
+    drawingsRef.current = []
+    setDrawings([])
+    selectedDrawingIdRef.current = null
+    setSelectedDrawingId(null)
+    draftDrawingRef.current = null
+    setDraftKind(null)
+    syncDrawingPrimitive([], null, null)
+  }, [syncDrawingPrimitive])
+
+  const getDrawingPoint = useCallback((param: MouseEventParams<Time>) => {
+    const chart = chartRef.current
+    const series = seriesRef.current
+
+    if (!chart || !series || !param.point) {
+      return null
+    }
+
+    const time = param.time ?? chart.timeScale().coordinateToTime(param.point.x)
+    const price = series.coordinateToPrice(param.point.y)
+
+    if (time == null || price == null) {
+      return null
+    }
+
+    return {
+      time,
+      price,
+    } satisfies DrawingPoint
+  }, [])
 
   const toggleIndicator = useCallback((indicatorId: IndicatorId) => {
     setEnabledIndicators((prev) =>
@@ -174,6 +340,29 @@ export default function CandlestickChart({
   const resetView = useCallback(() => {
     chartRef.current?.timeScale().fitContent()
   }, [])
+
+  useEffect(() => {
+    markerDetailsRef.current = markerDetails
+  }, [markerDetails])
+
+  useEffect(() => {
+    activeDrawingToolRef.current = activeDrawingTool
+
+    if (activeDrawingTool !== 'select' && selectedDrawingIdRef.current) {
+      updateSelectedDrawingId(null)
+    }
+
+    const currentDraftDrawing = draftDrawingRef.current
+    if (currentDraftDrawing && currentDraftDrawing.kind !== activeDrawingTool) {
+      clearDraftDrawing()
+    }
+  }, [activeDrawingTool, clearDraftDrawing, updateSelectedDrawingId])
+
+  useEffect(() => {
+    clearDrawings()
+    setActiveDrawingTool('select')
+    setMarkerTooltip(null)
+  }, [clearDrawings, symbol])
 
   useEffect(() => {
     if (!chartContainerRef.current) return
@@ -242,10 +431,14 @@ export default function CandlestickChart({
       },
     })
 
+    const drawingPrimitive = drawingPrimitiveRef.current
+
     chartRef.current = chart
     seriesRef.current = candlestickSeries
     volumeSeriesRef.current = volumeSeries
     markersRef.current = createSeriesMarkers(candlestickSeries, [])
+    candlestickSeries.attachPrimitive(drawingPrimitive)
+    syncDrawingPrimitive()
     const indicatorSeries = indicatorSeriesRef.current
 
     const handleResize = () => {
@@ -261,9 +454,10 @@ export default function CandlestickChart({
     return () => {
       window.removeEventListener('resize', handleResize)
       indicatorSeries.clear()
+      candlestickSeries.detachPrimitive(drawingPrimitive)
       chart.remove()
     }
-  }, [])
+  }, [syncDrawingPrimitive])
 
   useEffect(() => {
     if (!seriesRef.current) {
@@ -297,11 +491,13 @@ export default function CandlestickChart({
   }, [showVolume, volumeData])
 
   useEffect(() => {
-    if (seriesRef.current && markers) {
+    if (seriesRef.current) {
+      const nextMarkers = markers ?? []
+
       if (markersRef.current) {
-        markersRef.current.setMarkers(markers)
+        markersRef.current.setMarkers(nextMarkers)
       } else {
-        markersRef.current = createSeriesMarkers(seriesRef.current, markers)
+        markersRef.current = createSeriesMarkers(seriesRef.current, nextMarkers)
       }
     }
   }, [markers])
@@ -312,38 +508,47 @@ export default function CandlestickChart({
       return
     }
 
-    const markerDetailMap = new Map(markerDetails.map((detail) => [detail.id, detail]))
     const handleCrosshairMove: MouseEventHandler<Time> = (param) => {
       if (!param.point || typeof param.hoveredObjectId !== 'string') {
         setMarkerTooltip(null)
+      } else {
+        const detail = markerDetailsRef.current.find((markerDetail) => markerDetail.id === param.hoveredObjectId)
+
+        if (!detail) {
+          setMarkerTooltip(null)
+        } else {
+          const surface = chartSurfaceRef.current
+          const tooltipWidth = 248
+          const tooltipHeight = 52 + detail.fields.length * 26
+          const surfaceWidth = surface?.clientWidth ?? 0
+          const surfaceHeight = surface?.clientHeight ?? 0
+
+          const left = surfaceWidth > 0
+            ? Math.min(Math.max(12, param.point.x + 16), Math.max(12, surfaceWidth - tooltipWidth - 12))
+            : param.point.x + 16
+
+          const top = surfaceHeight > 0
+            ? Math.min(Math.max(12, param.point.y - tooltipHeight - 12), Math.max(12, surfaceHeight - tooltipHeight - 12))
+            : Math.max(12, param.point.y - tooltipHeight - 12)
+
+          setMarkerTooltip({
+            detail,
+            left,
+            top,
+          })
+        }
+      }
+
+      if (!draftDrawingRef.current) {
         return
       }
 
-      const detail = markerDetailMap.get(param.hoveredObjectId)
-      if (!detail) {
-        setMarkerTooltip(null)
+      const nextPoint = getDrawingPoint(param)
+      if (!nextPoint) {
         return
       }
 
-      const surface = chartSurfaceRef.current
-      const tooltipWidth = 248
-      const tooltipHeight = 52 + detail.fields.length * 26
-      const surfaceWidth = surface?.clientWidth ?? 0
-      const surfaceHeight = surface?.clientHeight ?? 0
-
-      const left = surfaceWidth > 0
-        ? Math.min(Math.max(12, param.point.x + 16), Math.max(12, surfaceWidth - tooltipWidth - 12))
-        : param.point.x + 16
-
-      const top = surfaceHeight > 0
-        ? Math.min(Math.max(12, param.point.y - tooltipHeight - 12), Math.max(12, surfaceHeight - tooltipHeight - 12))
-        : Math.max(12, param.point.y - tooltipHeight - 12)
-
-      setMarkerTooltip({
-        detail,
-        left,
-        top,
-      })
+      updateDraftDrawingPreview(nextPoint)
     }
 
     chart.subscribeCrosshairMove(handleCrosshairMove)
@@ -351,7 +556,109 @@ export default function CandlestickChart({
     return () => {
       chart.unsubscribeCrosshairMove(handleCrosshairMove)
     }
-  }, [markerDetails])
+  }, [getDrawingPoint, updateDraftDrawingPreview])
+
+  useEffect(() => {
+    const chart = chartRef.current
+    if (!chart) {
+      return
+    }
+
+    const handleClick: MouseEventHandler<Time> = (param) => {
+      const currentTool = activeDrawingToolRef.current
+
+      if (currentTool === 'select') {
+        if (typeof param.hoveredObjectId === 'string' && param.hoveredObjectId.startsWith('drawing:')) {
+          updateSelectedDrawingId(param.hoveredObjectId)
+          return
+        }
+
+        updateSelectedDrawingId(null)
+        return
+      }
+
+      const point = getDrawingPoint(param)
+      if (!point) {
+        return
+      }
+
+      if (currentTool === 'horizontalLine') {
+        const horizontalLineDrawing: ChartDrawing = {
+          id: createDrawingId('horizontalLine'),
+          kind: 'horizontalLine',
+          price: point.price,
+        }
+
+        const nextDrawings = updateDrawings((previousDrawings) => [...previousDrawings, horizontalLineDrawing])
+        updateSelectedDrawingId(horizontalLineDrawing.id)
+        syncDrawingPrimitive(nextDrawings, horizontalLineDrawing.id, null)
+        return
+      }
+
+      const currentDraftDrawing = draftDrawingRef.current
+
+      if (!currentDraftDrawing || currentDraftDrawing.kind !== currentTool) {
+        beginDraftDrawing(currentTool, point)
+        return
+      }
+
+      finalizeDraftDrawing(point)
+    }
+
+    chart.subscribeClick(handleClick)
+
+    return () => {
+      chart.unsubscribeClick(handleClick)
+    }
+  }, [
+    beginDraftDrawing,
+    finalizeDraftDrawing,
+    getDrawingPoint,
+    syncDrawingPrimitive,
+    updateDrawings,
+    updateSelectedDrawingId,
+  ])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target
+
+      if (
+        target instanceof HTMLInputElement
+        || target instanceof HTMLTextAreaElement
+        || target instanceof HTMLSelectElement
+        || (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return
+      }
+
+      if (event.key === 'Escape') {
+        if (draftDrawingRef.current) {
+          event.preventDefault()
+          clearDraftDrawing()
+          return
+        }
+
+        if (activeDrawingToolRef.current !== 'select') {
+          event.preventDefault()
+          setActiveDrawingTool('select')
+        }
+
+        return
+      }
+
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedDrawingIdRef.current) {
+        event.preventDefault()
+        removeSelectedDrawing()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [clearDraftDrawing, removeSelectedDrawing])
 
   useEffect(() => {
     const chart = chartRef.current
@@ -389,6 +696,28 @@ export default function CandlestickChart({
       existingSeries.setData(indicatorData)
     })
   }, [data, enabledIndicators])
+
+  const selectedDrawing = selectedDrawingId
+    ? drawings.find((drawing) => drawing.id === selectedDrawingId) ?? null
+    : null
+
+  const drawingStatus = activeDrawingTool === 'select'
+    ? selectedDrawing
+      ? `${getDrawingLabel(selectedDrawing.kind)} selected`
+      : null
+    : activeDrawingTool === 'horizontalLine'
+      ? 'Click anywhere on the chart to place a horizontal line'
+      : draftKind === activeDrawingTool
+        ? `Click the second point to finish the ${getDrawingLabel(activeDrawingTool).toLowerCase()}`
+        : `Click the first point to start the ${getDrawingLabel(activeDrawingTool).toLowerCase()}`
+
+  const drawingShortcutHint = activeDrawingTool === 'select'
+    ? selectedDrawing
+      ? 'Delete to remove the selected drawing'
+      : null
+    : draftKind
+      ? 'Esc to cancel'
+      : 'Esc to return to pointer'
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -485,6 +814,45 @@ export default function CandlestickChart({
               </div>
             )}
 
+            {data.length > 0 && (
+              <div className="flex flex-wrap items-center justify-start gap-2 xl:justify-end">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+                  Drawing
+                </span>
+
+                {drawingToolConfigs.map((tool) => (
+                  <button
+                    key={tool.id}
+                    type="button"
+                    onClick={() => setActiveDrawingTool((previousTool) => previousTool === tool.id ? 'select' : tool.id)}
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${activeDrawingTool === tool.id
+                      ? tool.activeClassName
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900'
+                      }`}
+                  >
+                    {tool.label}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={removeSelectedDrawing}
+                  disabled={!selectedDrawing}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 bg-white text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-gray-200 disabled:hover:text-gray-600"
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={clearDrawings}
+                  disabled={drawings.length === 0}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 bg-white text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-gray-200 disabled:hover:text-gray-600"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+
             {controls && (
               <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
                 {controls}
@@ -494,8 +862,25 @@ export default function CandlestickChart({
         </div>
       )}
 
-      <div ref={chartSurfaceRef} className="relative h-[500px]">
+      <div ref={chartSurfaceRef} className={`relative h-[500px] ${activeDrawingTool === 'select' ? '' : 'cursor-crosshair'}`}>
         <div ref={chartContainerRef} className="w-full h-full" />
+
+        {(drawingStatus || drawingShortcutHint) && data.length > 0 && (
+          <div className="absolute left-4 top-4 z-10 pointer-events-none">
+            <div className="rounded-2xl border border-gray-200 bg-white/92 px-4 py-3 shadow-sm backdrop-blur-sm">
+              {drawingStatus && (
+                <div className="text-sm font-medium text-gray-900">
+                  {drawingStatus}
+                </div>
+              )}
+              {drawingShortcutHint && (
+                <div className="mt-1 text-xs text-gray-500">
+                  {drawingShortcutHint}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/85 backdrop-blur-sm rounded-lg">
