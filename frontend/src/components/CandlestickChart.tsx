@@ -30,24 +30,32 @@ const indicatorConfigs = [
   {
     id: 'ma20',
     label: 'MA 20',
+    period: 20,
+    mode: 'simple',
     color: '#f59e0b',
     activeClassName: 'border-amber-300 bg-amber-50 text-amber-700',
   },
   {
     id: 'ma50',
     label: 'MA 50',
+    period: 50,
+    mode: 'simple',
     color: '#f97316',
     activeClassName: 'border-orange-300 bg-orange-50 text-orange-700',
   },
   {
     id: 'ema20',
     label: 'EMA 20',
+    period: 20,
+    mode: 'exponential',
     color: '#3b82f6',
     activeClassName: 'border-blue-300 bg-blue-50 text-blue-700',
   },
   {
     id: 'ema50',
     label: 'EMA 50',
+    period: 50,
+    mode: 'exponential',
     color: '#8b5cf6',
     activeClassName: 'border-violet-300 bg-violet-50 text-violet-700',
   },
@@ -60,7 +68,7 @@ function buildMovingAverageData(
   period: number,
   mode: 'simple' | 'exponential'
 ): LineData<Time>[] {
-  if (data.length < period) {
+  if (!Number.isFinite(period) || period <= 0 || data.length < period) {
     return []
   }
 
@@ -320,9 +328,7 @@ export default function CandlestickChart({
         return
       }
 
-      const period = Number(config.id.slice(2))
-      const mode = config.id.startsWith('ema') ? 'exponential' : 'simple'
-      const indicatorData = buildMovingAverageData(data, period, mode)
+      const indicatorData = buildMovingAverageData(data, config.period, config.mode)
 
       if (!existingSeries) {
         const nextSeries = chart.addSeries(LineSeries, {

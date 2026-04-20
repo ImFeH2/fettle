@@ -27,6 +27,7 @@ export default function Backtest() {
   const [chartData, setChartData] = useState<CandlestickData[]>([])
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [loadedChartTaskId, setLoadedChartTaskId] = useState<string | null>(null)
+  const [loadingChart, setLoadingChart] = useState(false)
   const loadingChartRef = useRef(false)
   const [showResultView, setShowResultView] = useState(false)
 
@@ -173,6 +174,7 @@ export default function Backtest() {
     if (loadingChartRef.current) return
 
     loadingChartRef.current = true
+    setLoadingChart(true)
     try {
       const candles = await api.candles.get({
         exchange: task.exchange,
@@ -192,6 +194,7 @@ export default function Backtest() {
       console.error('Failed to load chart data:', error)
     } finally {
       loadingChartRef.current = false
+      setLoadingChart(false)
     }
   }, [])
 
@@ -210,6 +213,7 @@ export default function Backtest() {
       const task = tasks.find(t => t.id === selectedTaskId)
       if (task && task.status === 'completed' && task.statistic) {
         const markerData = convertTradesToMarkers(task.statistic.trades)
+        setChartData([])
         setTradeMarkers(markerData.markers)
         setTradeMarkerDetails(markerData.details)
         loadChartForTask(task)
@@ -443,20 +447,29 @@ export default function Backtest() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-6">
-              {chartData.length > 0 && (
+              {(() => {
+                const task = tasks.find(t => t.id === selectedTaskId)
+                if (!task?.statistic) {
+                  return null
+                }
+
+                return (
                 <div className="mb-6">
                   <div className="bg-white rounded-xl border border-gray-200 p-6">
                     <h3 className="text-lg font-medium text-gray-900 mb-4">Chart</h3>
                     <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
                       <CandlestickChart
                         data={chartData}
+                        symbol={`${task.symbol} (${task.exchange} - ${task.timeframe})`}
                         markers={tradeMarkers}
                         markerDetails={tradeMarkerDetails}
+                        loading={loadingChart}
                       />
                     </div>
                   </div>
                 </div>
-              )}
+                )
+              })()}
 
               {(() => {
                 const task = tasks.find(t => t.id === selectedTaskId)
