@@ -797,11 +797,52 @@ export default function CandlestickChart({
         : 'rounded-xl'
         }`}
     >
-      {(symbol || controls || timeframeOptions.length > 1) && (
+      {(symbol || controls || timeframeOptions.length > 1 || data.length > 0) && (
         <div className="flex flex-col gap-4 mb-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-3">
             {symbol && (
               <h2 className="text-sm font-medium text-gray-900 truncate">{symbol}</h2>
+            )}
+
+            {data.length > 0 && (
+              <div className="flex flex-wrap items-center justify-start gap-2">
+                {drawingToolConfigs.map((tool) => (
+                  <button
+                    key={tool.id}
+                    type="button"
+                    onClick={() => setActiveDrawingTool((previousTool) => previousTool === tool.id ? 'select' : tool.id)}
+                    title={tool.label}
+                    aria-label={tool.label}
+                    className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${activeDrawingTool === tool.id
+                      ? tool.activeClassName
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900'
+                      }`}
+                  >
+                    <tool.icon className="h-4 w-4" />
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={removeSelectedDrawing}
+                  disabled={!selectedDrawing}
+                  title="Delete"
+                  aria-label="Delete"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-gray-200 disabled:hover:text-gray-600"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={clearDrawings}
+                  disabled={drawings.length === 0}
+                  title="Clear"
+                  aria-label="Clear"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-gray-200 disabled:hover:text-gray-600"
+                >
+                  <BrushCleaning className="h-4 w-4" />
+                </button>
+              </div>
             )}
           </div>
 
@@ -903,51 +944,6 @@ export default function CandlestickChart({
                     </button>
                   )
                 })}
-              </div>
-            )}
-
-            {data.length > 0 && (
-              <div className="flex flex-wrap items-center justify-start gap-2 xl:justify-end">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
-                  Drawing
-                </span>
-
-                {drawingToolConfigs.map((tool) => (
-                  <button
-                    key={tool.id}
-                    type="button"
-                    onClick={() => setActiveDrawingTool((previousTool) => previousTool === tool.id ? 'select' : tool.id)}
-                    title={tool.label}
-                    aria-label={tool.label}
-                    className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${activeDrawingTool === tool.id
-                      ? tool.activeClassName
-                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900'
-                      }`}
-                  >
-                    <tool.icon className="h-4 w-4" />
-                  </button>
-                ))}
-
-                <button
-                  type="button"
-                  onClick={removeSelectedDrawing}
-                  disabled={!selectedDrawing}
-                  title="Delete"
-                  aria-label="Delete"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-gray-200 disabled:hover:text-gray-600"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={clearDrawings}
-                  disabled={drawings.length === 0}
-                  title="Clear"
-                  aria-label="Clear"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-gray-200 disabled:hover:text-gray-600"
-                >
-                  <BrushCleaning className="h-4 w-4" />
-                </button>
               </div>
             )}
 
