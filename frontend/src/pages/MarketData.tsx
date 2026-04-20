@@ -35,6 +35,8 @@ export default function MarketData() {
     try {
       setLoadingChart(true)
       setSelectedData(info)
+      setChartData([])
+      setVolumeData([])
       const candles = await api.candles.get({
         exchange: info.exchange,
         symbol: info.symbol,
