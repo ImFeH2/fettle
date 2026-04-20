@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Download, Search, Clock, CheckCircle, XCircle, Loader, BarChart3 } from 'lucide-react'
-import { useAppSettings } from '@/lib/appSettings'
+import { TIMEFRAME_OPTIONS, useAppSettings } from '@/lib/appSettings'
 import { api } from '@/services/api'
 import { useFetchCandlesStream } from '@/hooks/useFetchCandlesStream'
 import ComboBox from '@/components/ComboBox'
@@ -170,6 +170,31 @@ export default function MarketData() {
   )
 
   const fetchTasks = tasks
+  const chartTimeframes = selectedData
+    ? TIMEFRAME_OPTIONS.filter((timeframe) =>
+      availableData.some((info) =>
+        info.exchange === selectedData.exchange
+        && info.symbol === selectedData.symbol
+        && info.timeframe === timeframe
+      )
+    )
+    : []
+
+  const handleChartTimeframeChange = useCallback((timeframe: Timeframe) => {
+    if (!selectedData || timeframe === selectedData.timeframe) {
+      return
+    }
+
+    const nextData = availableData.find((info) =>
+      info.exchange === selectedData.exchange
+      && info.symbol === selectedData.symbol
+      && info.timeframe === timeframe
+    )
+
+    if (nextData) {
+      loadChartData(nextData)
+    }
+  }, [availableData, loadChartData, selectedData])
 
   const getTaskStatusIcon = (task: FetchCandlesTask) => {
     switch (task.status) {
@@ -194,16 +219,14 @@ export default function MarketData() {
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-3 space-y-6">
-            {loadingChart ? (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <div className="flex items-center justify-center h-[500px]">
-                  <Loader className="w-8 h-8 text-gray-400 animate-spin" />
-                </div>
-              </div>
-            ) : chartData.length > 0 && selectedData ? (
+            {selectedData ? (
               <CandlestickChart
                 data={chartData}
                 symbol={`${selectedData.symbol} (${selectedData.exchange} - ${selectedData.timeframe})`}
+                loading={loadingChart}
+                timeframeOptions={chartTimeframes}
+                activeTimeframe={selectedData.timeframe}
+                onTimeframeChange={handleChartTimeframeChange}
               />
             ) : (
               <div className="bg-white rounded-xl border border-gray-200 p-6">
