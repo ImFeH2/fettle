@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, createSeriesMarkers, type HistogramData, type IChartApi, type ISeriesApi, type CandlestickData, type LineData, type MouseEventHandler, type MouseEventParams, type SeriesMarker, type Time, type ISeriesMarkersPluginApi } from 'lightweight-charts'
-import { Loader2, Minus, Plus, RotateCcw } from 'lucide-react'
+import { BrushCleaning, Loader2, Minus, MousePointer2, Plus, RotateCcw, Square, Trash2, TrendingUp, type LucideIcon } from 'lucide-react'
 import { ChartDrawingPrimitive, createDrawingId, getDrawingLabel, type ChartDrawing, type DraftDrawing, type DrawingPoint, type DrawingTool } from '@/components/chartDrawings'
 import { formatChartTime } from '@/utils/time'
 import type { Timeframe } from '@/types'
@@ -70,24 +70,33 @@ const drawingToolConfigs = [
   {
     id: 'select',
     label: 'Pointer',
+    icon: MousePointer2,
     activeClassName: 'border-gray-900 bg-gray-900 text-white',
   },
   {
     id: 'trendLine',
     label: 'Trend Line',
+    icon: TrendingUp,
     activeClassName: 'border-blue-300 bg-blue-50 text-blue-700',
   },
   {
     id: 'horizontalLine',
     label: 'Horizontal Line',
+    icon: Minus,
     activeClassName: 'border-orange-300 bg-orange-50 text-orange-700',
   },
   {
     id: 'range',
     label: 'Range Box',
+    icon: Square,
     activeClassName: 'border-teal-300 bg-teal-50 text-teal-700',
   },
-] as const
+] as const satisfies ReadonlyArray<{
+  id: DrawingTool
+  label: string
+  icon: LucideIcon
+  activeClassName: string
+}>
 
 function buildMovingAverageData(
   data: CandlestickData[],
@@ -825,12 +834,14 @@ export default function CandlestickChart({
                     key={tool.id}
                     type="button"
                     onClick={() => setActiveDrawingTool((previousTool) => previousTool === tool.id ? 'select' : tool.id)}
-                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${activeDrawingTool === tool.id
+                    title={tool.label}
+                    aria-label={tool.label}
+                    className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${activeDrawingTool === tool.id
                       ? tool.activeClassName
                       : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900'
                       }`}
                   >
-                    {tool.label}
+                    <tool.icon className="h-4 w-4" />
                   </button>
                 ))}
 
@@ -838,17 +849,21 @@ export default function CandlestickChart({
                   type="button"
                   onClick={removeSelectedDrawing}
                   disabled={!selectedDrawing}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 bg-white text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-gray-200 disabled:hover:text-gray-600"
+                  title="Delete"
+                  aria-label="Delete"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-gray-200 disabled:hover:text-gray-600"
                 >
-                  Delete
+                  <Trash2 className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
                   onClick={clearDrawings}
                   disabled={drawings.length === 0}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 bg-white text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-gray-200 disabled:hover:text-gray-600"
+                  title="Clear"
+                  aria-label="Clear"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-gray-200 disabled:hover:text-gray-600"
                 >
-                  Clear
+                  <BrushCleaning className="h-4 w-4" />
                 </button>
               </div>
             )}
