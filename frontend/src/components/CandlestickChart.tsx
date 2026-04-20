@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createChart, CandlestickSeries, LineSeries, createSeriesMarkers, type IChartApi, type ISeriesApi, type CandlestickData, type LineData, type SeriesMarker, type Time, type ISeriesMarkersPluginApi } from 'lightweight-charts'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Minus, Plus, RotateCcw } from 'lucide-react'
 import { formatChartTime } from '@/utils/time'
 import type { Timeframe } from '@/types'
 
@@ -116,6 +116,33 @@ export default function CandlestickChart({
         ? prev.filter((item) => item !== indicatorId)
         : [...prev, indicatorId]
     )
+  }, [])
+
+  const adjustZoom = useCallback((factor: number) => {
+    const chart = chartRef.current
+    if (!chart) {
+      return
+    }
+
+    const timeScale = chart.timeScale()
+    const range = timeScale.getVisibleLogicalRange()
+
+    if (!range) {
+      timeScale.fitContent()
+      return
+    }
+
+    const center = (range.from + range.to) / 2
+    const nextSpan = Math.max(10, (range.to - range.from) * factor)
+
+    timeScale.setVisibleLogicalRange({
+      from: center - nextSpan / 2,
+      to: center + nextSpan / 2,
+    })
+  }, [])
+
+  const resetView = useCallback(() => {
+    chartRef.current?.timeScale().fitContent()
   }, [])
 
   useEffect(() => {
@@ -275,6 +302,35 @@ export default function CandlestickChart({
                     {timeframe}
                   </button>
                 ))}
+              </div>
+            )}
+
+            {data.length > 0 && (
+              <div className="flex flex-wrap justify-start gap-2 xl:justify-end">
+                <button
+                  type="button"
+                  onClick={() => adjustZoom(1.25)}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 bg-white text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                  Zoom Out
+                </button>
+                <button
+                  type="button"
+                  onClick={() => adjustZoom(0.8)}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 bg-white text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Zoom In
+                </button>
+                <button
+                  type="button"
+                  onClick={resetView}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 bg-white text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Reset View
+                </button>
               </div>
             )}
 
