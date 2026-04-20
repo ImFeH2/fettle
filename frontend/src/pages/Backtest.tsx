@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { Play, Clock, CheckCircle, XCircle, Loader, TrendingUp, TrendingDown, X } from 'lucide-react'
+import { Play, Clock, CheckCircle, XCircle, Loader, TrendingUp, TrendingDown } from 'lucide-react'
 import { useAppSettings } from '@/lib/appSettings'
 import CandlestickChart, { type ChartMarkerDetail } from '@/components/CandlestickChart'
 import { api } from '@/services/api'
@@ -30,7 +30,6 @@ export default function Backtest() {
   const [loadedChartTaskId, setLoadedChartTaskId] = useState<string | null>(null)
   const [loadingChart, setLoadingChart] = useState(false)
   const loadingChartRef = useRef(false)
-  const [showResultView, setShowResultView] = useState(false)
 
   const { tasks, connected } = useBacktestStream()
 
@@ -237,7 +236,6 @@ export default function Backtest() {
   const handleTaskClick = (task: BacktestTask) => {
     if (task.status === 'completed' && task.statistic) {
       setSelectedTaskId(task.id)
-      setShowResultView(true)
     }
   }
 
@@ -257,6 +255,9 @@ export default function Backtest() {
   }
 
   const canRunBacktest = selectedStrategy && selectedSymbol && selectedTimeframe && !running
+  const selectedResultTask = selectedTaskId
+    ? tasks.find((task) => task.id === selectedTaskId && task.status === 'completed' && task.statistic) ?? null
+    : null
 
   return (
     <div className="h-full flex flex-col">
@@ -438,66 +439,37 @@ export default function Backtest() {
               </div>
             </div>
           </div>
+
+          {selectedResultTask?.statistic && (
+            <div className="mt-6 space-y-6">
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="mb-4">
+                  <h2 className="text-xl font-semibold text-gray-900">Backtest Result</h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {selectedResultTask.name} · {selectedResultTask.symbol} · {selectedResultTask.exchange} · {selectedResultTask.timeframe}
+                  </p>
+                </div>
+
+                <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                  <CandlestickChart
+                    data={chartData}
+                    volumeData={volumeData}
+                    symbol={`${selectedResultTask.symbol} (${selectedResultTask.exchange} - ${selectedResultTask.timeframe})`}
+                    markers={tradeMarkers}
+                    markerDetails={tradeMarkerDetails}
+                    loading={loadingChart}
+                  />
+                </div>
+              </div>
+
+              <BacktestResult
+                statistic={selectedResultTask.statistic}
+                precision={selectedResultTask.precision}
+              />
+            </div>
+          )}
         </div>
       </div>
-
-      {showResultView && selectedTaskId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">Backtest Result</h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  {tasks.find(t => t.id === selectedTaskId)?.name} · {tasks.find(t => t.id === selectedTaskId)?.symbol}
-                </p>
-              </div>
-              <button
-                onClick={() => setShowResultView(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6">
-              {(() => {
-                const task = tasks.find(t => t.id === selectedTaskId)
-                if (!task?.statistic) {
-                  return null
-                }
-
-                return (
-                <div className="mb-6">
-                  <div className="bg-white rounded-xl border border-gray-200 p-6">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Chart</h3>
-                    <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                      <CandlestickChart
-                        data={chartData}
-                        volumeData={volumeData}
-                        symbol={`${task.symbol} (${task.exchange} - ${task.timeframe})`}
-                        markers={tradeMarkers}
-                        markerDetails={tradeMarkerDetails}
-                        loading={loadingChart}
-                      />
-                    </div>
-                  </div>
-                </div>
-                )
-              })()}
-
-              {(() => {
-                const task = tasks.find(t => t.id === selectedTaskId)
-                return task?.statistic && (
-                  <BacktestResult
-                    statistic={task.statistic}
-                    precision={task.precision}
-                  />
-                )
-              })()}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
