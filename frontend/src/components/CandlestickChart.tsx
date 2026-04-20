@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { createChart, CandlestickSeries, LineSeries, createSeriesMarkers, type IChartApi, type ISeriesApi, type CandlestickData, type LineData, type SeriesMarker, type Time, type ISeriesMarkersPluginApi } from 'lightweight-charts'
+import { createChart, CandlestickSeries, LineSeries, createSeriesMarkers, type IChartApi, type ISeriesApi, type CandlestickData, type LineData, type MouseEventHandler, type SeriesMarker, type Time, type ISeriesMarkersPluginApi } from 'lightweight-charts'
 import { Loader2, Minus, Plus, RotateCcw } from 'lucide-react'
 import { formatChartTime } from '@/utils/time'
 import type { Timeframe } from '@/types'
@@ -8,11 +8,22 @@ interface CandlestickChartProps {
   data: CandlestickData[]
   symbol?: string
   markers?: SeriesMarker<Time>[]
+  markerDetails?: ChartMarkerDetail[]
   loading?: boolean
   timeframeOptions?: Timeframe[]
   activeTimeframe?: Timeframe | ''
   onTimeframeChange?: (timeframe: Timeframe) => void
   controls?: ReactNode
+}
+
+export interface ChartMarkerDetail {
+  id: string
+  title: string
+  accentColor: string
+  fields: Array<{
+    label: string
+    value: string
+  }>
 }
 
 const indicatorConfigs = [
@@ -97,6 +108,7 @@ export default function CandlestickChart({
   data,
   symbol,
   markers,
+  markerDetails = [],
   loading = false,
   timeframeOptions = [],
   activeTimeframe = '',
@@ -104,11 +116,17 @@ export default function CandlestickChart({
   controls,
 }: CandlestickChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
+  const chartSurfaceRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
   const indicatorSeriesRef = useRef(new Map<IndicatorId, ISeriesApi<'Line'>>())
   const [enabledIndicators, setEnabledIndicators] = useState<IndicatorId[]>([])
+  const [markerTooltip, setMarkerTooltip] = useState<{
+    detail: ChartMarkerDetail
+    left: number
+    top: number
+  } | null>(null)
 
   const toggleIndicator = useCallback((indicatorId: IndicatorId) => {
     setEnabledIndicators((prev) =>
@@ -243,6 +261,53 @@ export default function CandlestickChart({
       return
     }
 
+    const markerDetailMap = new Map(markerDetails.map((detail) => [detail.id, detail]))
+    const handleCrosshairMove: MouseEventHandler<Time> = (param) => {
+      if (!param.point || typeof param.hoveredObjectId !== 'string') {
+        setMarkerTooltip(null)
+        return
+      }
+
+      const detail = markerDetailMap.get(param.hoveredObjectId)
+      if (!detail) {
+        setMarkerTooltip(null)
+        return
+      }
+
+      const surface = chartSurfaceRef.current
+      const tooltipWidth = 248
+      const tooltipHeight = 52 + detail.fields.length * 26
+      const surfaceWidth = surface?.clientWidth ?? 0
+      const surfaceHeight = surface?.clientHeight ?? 0
+
+      const left = surfaceWidth > 0
+        ? Math.min(Math.max(12, param.point.x + 16), Math.max(12, surfaceWidth - tooltipWidth - 12))
+        : param.point.x + 16
+
+      const top = surfaceHeight > 0
+        ? Math.min(Math.max(12, param.point.y - tooltipHeight - 12), Math.max(12, surfaceHeight - tooltipHeight - 12))
+        : Math.max(12, param.point.y - tooltipHeight - 12)
+
+      setMarkerTooltip({
+        detail,
+        left,
+        top,
+      })
+    }
+
+    chart.subscribeCrosshairMove(handleCrosshairMove)
+
+    return () => {
+      chart.unsubscribeCrosshairMove(handleCrosshairMove)
+    }
+  }, [markerDetails])
+
+  useEffect(() => {
+    const chart = chartRef.current
+    if (!chart) {
+      return
+    }
+
     indicatorConfigs.forEach((config) => {
       const existingSeries = indicatorSeriesRef.current.get(config.id)
       const isEnabled = enabledIndicators.includes(config.id)
@@ -369,7 +434,7 @@ export default function CandlestickChart({
         </div>
       )}
 
-      <div className="relative">
+      <div ref={chartSurfaceRef} className="relative">
         <div ref={chartContainerRef} className="w-full" />
 
         {loading && (
@@ -377,6 +442,37 @@ export default function CandlestickChart({
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 bg-white text-sm font-medium text-gray-700 shadow-sm">
               <Loader2 className="w-4 h-4 animate-spin" />
               Loading chart
+            </div>
+          </div>
+        )}
+
+        {markerTooltip && (
+          <div
+            className="absolute z-20 w-[248px] max-w-[248px] pointer-events-none rounded-xl border border-gray-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm"
+            style={{
+              left: `${markerTooltip.left}px`,
+              top: `${markerTooltip.top}px`,
+            }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <span
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: markerTooltip.detail.accentColor }}
+              />
+              <span className="text-sm font-semibold text-gray-900">
+                {markerTooltip.detail.title}
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {markerTooltip.detail.fields.map((field) => (
+                <div key={`${markerTooltip.detail.id}-${field.label}`} className="flex items-start justify-between gap-3">
+                  <span className="text-xs text-gray-500">{field.label}</span>
+                  <span className="text-xs font-medium text-gray-900 text-right break-all">
+                    {field.value}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         )}

@@ -1,13 +1,14 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { Play, Clock, CheckCircle, XCircle, Loader, TrendingUp, TrendingDown, X } from 'lucide-react'
 import { useAppSettings } from '@/lib/appSettings'
+import CandlestickChart, { type ChartMarkerDetail } from '@/components/CandlestickChart'
 import { api } from '@/services/api'
 import { useBacktestStream } from '@/hooks/useBacktestStream'
 import ComboBox from '@/components/ComboBox'
-import CandlestickChart from '@/components/CandlestickChart'
 import BacktestResult from '@/components/BacktestResult'
 import type { Timeframe, BacktestTask, AvailableCandleInfo, Candle, Trade } from '@/types'
 import type { CandlestickData, SeriesMarker, Time } from 'lightweight-charts'
+import { formatTimestamp } from '@/utils/time'
 
 export default function Backtest() {
   const settings = useAppSettings()
@@ -22,6 +23,7 @@ export default function Backtest() {
 
   const [availableData, setAvailableData] = useState<AvailableCandleInfo[]>([])
   const [tradeMarkers, setTradeMarkers] = useState<SeriesMarker<Time>[]>([])
+  const [tradeMarkerDetails, setTradeMarkerDetails] = useState<ChartMarkerDetail[]>([])
   const [chartData, setChartData] = useState<CandlestickData[]>([])
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [loadedChartTaskId, setLoadedChartTaskId] = useState<string | null>(null)
@@ -89,19 +91,49 @@ export default function Backtest() {
     ))
     : []
 
-  const convertTradesToMarkers = (trades: Trade[]): SeriesMarker<Time>[] => {
-    return trades.map(trade => {
+  const convertTradesToMarkers = (trades: Trade[]) => {
+    const markers: SeriesMarker<Time>[] = []
+    const details: ChartMarkerDetail[] = []
+
+    trades.forEach((trade, index) => {
       const isBuy = trade.trade_type === 'market_buy' || trade.trade_type === 'limit_buy'
       const isLimit = trade.trade_type === 'limit_buy' || trade.trade_type === 'limit_sell'
+      const markerId = `${trade.timestamp}-${trade.trade_type}-${index}`
 
-      return {
+      markers.push({
+        id: markerId,
         time: (trade.timestamp / 1000) as Time,
         position: isBuy ? 'belowBar' : 'aboveBar',
         color: isBuy ? '#26a69a' : '#ef5350',
         shape: isBuy ? 'arrowUp' : 'arrowDown',
         text: `${isLimit ? 'LIMIT' : 'MARKET'} ${isBuy ? 'BUY' : 'SELL'} ${trade.amount} @ ${trade.price}`,
-      }
+      })
+
+      const profitValue = trade.profit ? Number(trade.profit) : null
+
+      details.push({
+        id: markerId,
+        title: `${isLimit ? 'Limit' : 'Market'} ${isBuy ? 'Buy' : 'Sell'}`,
+        accentColor: isBuy ? '#26a69a' : '#ef5350',
+        fields: [
+          { label: 'Time', value: formatTimestamp(trade.timestamp) },
+          { label: 'Price', value: trade.price },
+          { label: 'Amount', value: trade.amount },
+          { label: 'Fee', value: trade.fee },
+          {
+            label: 'Profit',
+            value: profitValue === null || Number.isNaN(profitValue)
+              ? 'N/A'
+              : profitValue.toFixed(2),
+          },
+        ],
+      })
     })
+
+    return {
+      markers,
+      details,
+    }
   }
 
   const handleRunBacktest = useCallback(async (e?: React.MouseEvent) => {
@@ -177,8 +209,9 @@ export default function Backtest() {
     if (selectedTaskId && selectedTaskId !== loadedChartTaskId && !loadingChartRef.current) {
       const task = tasks.find(t => t.id === selectedTaskId)
       if (task && task.status === 'completed' && task.statistic) {
-        const markers = convertTradesToMarkers(task.statistic.trades)
-        setTradeMarkers(markers)
+        const markerData = convertTradesToMarkers(task.statistic.trades)
+        setTradeMarkers(markerData.markers)
+        setTradeMarkerDetails(markerData.details)
         loadChartForTask(task)
       }
     }
@@ -415,7 +448,11 @@ export default function Backtest() {
                   <div className="bg-white rounded-xl border border-gray-200 p-6">
                     <h3 className="text-lg font-medium text-gray-900 mb-4">Chart</h3>
                     <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                      <CandlestickChart data={chartData} markers={tradeMarkers} />
+                      <CandlestickChart
+                        data={chartData}
+                        markers={tradeMarkers}
+                        markerDetails={tradeMarkerDetails}
+                      />
                     </div>
                   </div>
                 </div>
