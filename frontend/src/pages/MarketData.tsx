@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Download, Search, Clock, CheckCircle, XCircle, Loader, BarChart3 } from 'lucide-react'
+import { useAppSettings } from '@/lib/appSettings'
 import { api } from '@/services/api'
 import { useFetchCandlesStream } from '@/hooks/useFetchCandlesStream'
 import ComboBox from '@/components/ComboBox'
@@ -8,6 +9,7 @@ import type { Timeframe, FetchCandlesTask, AvailableCandleInfo, Candle } from '@
 import type { CandlestickData, Time } from 'lightweight-charts'
 
 export default function MarketData() {
+  const settings = useAppSettings()
   const [exchanges, setExchanges] = useState<string[]>([])
   const [selectedExchange, setSelectedExchange] = useState<string>('')
   const [symbols, setSymbols] = useState<string[]>([])
@@ -28,68 +30,7 @@ export default function MarketData() {
 
   const { tasks, connected } = useFetchCandlesStream()
 
-  useEffect(() => {
-    loadExchanges()
-    loadAvailableData()
-  }, [])
-
-  useEffect(() => {
-    if (selectedExchange) {
-      loadExchangeData()
-    }
-  }, [selectedExchange])
-
-  const loadExchanges = async () => {
-    try {
-      setLoading(true)
-      const data = await api.exchanges.list()
-      setExchanges(data)
-      if (data.length > 0) {
-        setSelectedExchange(data[0])
-      }
-    } catch (error) {
-      console.error('Failed to load exchanges:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadExchangeData = async () => {
-    try {
-      setLoading(true)
-      const [symbolsData, timeframesData] = await Promise.all([
-        api.symbols.list(selectedExchange),
-        api.timeframes.list(selectedExchange),
-      ])
-      setSymbols(symbolsData)
-      setTimeframes(timeframesData)
-
-      if (symbolsData.length > 0) {
-        setSelectedSymbol(symbolsData[0])
-      }
-      if (timeframesData.length > 0) {
-        setSelectedTimeframe(timeframesData[0])
-      }
-    } catch (error) {
-      console.error('Failed to load exchange data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadAvailableData = async () => {
-    try {
-      const data = await api.candles.available()
-      setAvailableData(data)
-      if (data.length > 0 && !selectedData) {
-        loadChartData(data[0])
-      }
-    } catch (error) {
-      console.error('Failed to load available data:', error)
-    }
-  }
-
-  const loadChartData = async (info: AvailableCandleInfo) => {
+  const loadChartData = useCallback(async (info: AvailableCandleInfo) => {
     try {
       setLoadingChart(true)
       setSelectedData(info)
@@ -113,7 +54,88 @@ export default function MarketData() {
     } finally {
       setLoadingChart(false)
     }
-  }
+  }, [])
+
+  const loadExchanges = useCallback(async () => {
+    try {
+      setLoading(true)
+      const data = await api.exchanges.list()
+      setExchanges(data)
+      if (data.length > 0) {
+        const preferredExchange = settings.defaults.exchange && data.includes(settings.defaults.exchange)
+          ? settings.defaults.exchange
+          : data[0]
+        setSelectedExchange(preferredExchange)
+      }
+    } catch (error) {
+      console.error('Failed to load exchanges:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [settings.defaults.exchange])
+
+  const loadExchangeData = useCallback(async () => {
+    if (!selectedExchange) {
+      return
+    }
+
+    try {
+      setLoading(true)
+      const [symbolsData, timeframesData] = await Promise.all([
+        api.symbols.list(selectedExchange),
+        api.timeframes.list(selectedExchange),
+      ])
+      setSymbols(symbolsData)
+      setTimeframes(timeframesData)
+
+      if (symbolsData.length > 0) {
+        const preferredSymbol = settings.defaults.exchange === selectedExchange
+          && settings.defaults.symbol
+          && symbolsData.includes(settings.defaults.symbol)
+          ? settings.defaults.symbol
+          : symbolsData[0]
+        setSelectedSymbol(preferredSymbol)
+      }
+      if (timeframesData.length > 0) {
+        const preferredTimeframe = settings.defaults.exchange === selectedExchange
+          && settings.defaults.timeframe
+          && timeframesData.includes(settings.defaults.timeframe)
+          ? settings.defaults.timeframe
+          : timeframesData[0]
+        setSelectedTimeframe(preferredTimeframe)
+      }
+    } catch (error) {
+      console.error('Failed to load exchange data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedExchange, settings.defaults.exchange, settings.defaults.symbol, settings.defaults.timeframe])
+
+  const loadAvailableData = useCallback(async () => {
+    try {
+      const data = await api.candles.available()
+      setAvailableData(data)
+      if (data.length > 0 && !selectedData) {
+        const preferredData = data.find((item) =>
+          item.exchange === settings.defaults.exchange
+          && item.symbol === settings.defaults.symbol
+          && item.timeframe === settings.defaults.timeframe
+        ) ?? data[0]
+        loadChartData(preferredData)
+      }
+    } catch (error) {
+      console.error('Failed to load available data:', error)
+    }
+  }, [loadChartData, selectedData, settings.defaults.exchange, settings.defaults.symbol, settings.defaults.timeframe])
+
+  useEffect(() => {
+    loadExchanges()
+    loadAvailableData()
+  }, [loadAvailableData, loadExchanges])
+
+  useEffect(() => {
+    loadExchangeData()
+  }, [loadExchangeData])
 
   const createFetchTask = async () => {
     if (!selectedSymbol || !selectedTimeframe) return

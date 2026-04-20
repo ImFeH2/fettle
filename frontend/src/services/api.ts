@@ -18,8 +18,7 @@ import type {
   AvailableCandleInfo,
   ListStrategiesResponse
 } from '@/types'
-
-const API_BASE_URL = 'http://localhost:3001'
+import { getAppSettings, normalizeApiBaseUrl } from '@/lib/appSettings'
 
 class ApiError extends Error {
   public error: string
@@ -35,7 +34,7 @@ class ApiError extends Error {
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(buildApiUrl(endpoint), {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -70,6 +69,10 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
   }
 }
 
+function buildApiUrl(endpoint: string) {
+  return `${normalizeApiBaseUrl(getAppSettings().apiBaseUrl)}${endpoint}`
+}
+
 export const api = {
   health: {
     check: () => fetchAPI<string>('/health'),
@@ -101,7 +104,7 @@ export const api = {
       }),
 
     stream: (onEvent: (task: FetchCandlesTask) => void, onError?: (error: Error) => void) => {
-      const eventSource = new EventSource(`${API_BASE_URL}/tasks/fetch/stream`)
+      const eventSource = new EventSource(buildApiUrl('/tasks/fetch/stream'))
 
       eventSource.onmessage = (event) => {
         try {
@@ -141,7 +144,7 @@ export const api = {
       }),
 
     stream: (onEvent: (task: BacktestTask) => void, onError?: (error: Error) => void) => {
-      const eventSource = new EventSource(`${API_BASE_URL}/tasks/backtest/stream`)
+      const eventSource = new EventSource(buildApiUrl('/tasks/backtest/stream'))
 
       eventSource.onmessage = (event) => {
         try {

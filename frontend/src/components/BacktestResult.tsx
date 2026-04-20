@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight } from 'lucide-react'
+import { TrendingUp, TrendingDown, DollarSign, Percent, BarChart3, ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react'
 import { formatTimestamp } from '@/utils/time'
 import type { BacktestStatistic, MarketPrecision } from '@/types'
 
@@ -53,7 +53,7 @@ export default function BacktestResult({ statistic, precision }: BacktestResultP
     valueColor = 'text-gray-900',
     subtitle
   }: {
-    icon: any
+    icon: LucideIcon
     label: string
     value: string | number
     valueColor?: string

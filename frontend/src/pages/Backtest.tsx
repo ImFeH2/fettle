@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { Play, Clock, CheckCircle, XCircle, Loader, TrendingUp, TrendingDown, X } from 'lucide-react'
+import { useAppSettings } from '@/lib/appSettings'
 import { api } from '@/services/api'
 import { useBacktestStream } from '@/hooks/useBacktestStream'
 import ComboBox from '@/components/ComboBox'
@@ -9,6 +10,7 @@ import type { Timeframe, BacktestTask, AvailableCandleInfo, Candle, Trade } from
 import type { CandlestickData, SeriesMarker, Time } from 'lightweight-charts'
 
 export default function Backtest() {
+  const settings = useAppSettings()
   const [strategies, setStrategies] = useState<string[]>([])
   const [selectedStrategy, setSelectedStrategy] = useState<string>('')
   const [selectedExchange, setSelectedExchange] = useState<string>('')
@@ -28,12 +30,7 @@ export default function Backtest() {
 
   const { tasks, connected } = useBacktestStream()
 
-  useEffect(() => {
-    loadAvailableData()
-    loadStrategies()
-  }, [])
-
-  const loadStrategies = async () => {
+  const loadStrategies = useCallback(async () => {
     try {
       const response = await api.strategy.list()
       setStrategies(response.strategies)
@@ -43,22 +40,36 @@ export default function Backtest() {
     } catch (error) {
       console.error('Failed to load strategies:', error)
     }
-  }
+  }, [])
 
-  const loadAvailableData = async () => {
+  const loadAvailableData = useCallback(async () => {
     try {
       const data = await api.candles.available()
       setAvailableData(data)
 
       if (data.length > 0) {
-        setSelectedExchange(data[0].exchange)
-        setSelectedSymbol(data[0].symbol)
-        setSelectedTimeframe(data[0].timeframe)
+        const preferredData = data.find((item) =>
+          item.exchange === settings.defaults.exchange
+          && item.symbol === settings.defaults.symbol
+          && item.timeframe === settings.defaults.timeframe
+        ) ?? data.find((item) =>
+          item.exchange === settings.defaults.exchange
+          && item.symbol === settings.defaults.symbol
+        ) ?? data.find((item) => item.exchange === settings.defaults.exchange) ?? data[0]
+
+        setSelectedExchange(preferredData.exchange)
+        setSelectedSymbol(preferredData.symbol)
+        setSelectedTimeframe(preferredData.timeframe)
       }
     } catch (error) {
       console.error('Failed to load available data:', error)
     }
-  }
+  }, [settings.defaults.exchange, settings.defaults.symbol, settings.defaults.timeframe])
+
+  useEffect(() => {
+    loadAvailableData()
+    loadStrategies()
+  }, [loadAvailableData, loadStrategies])
 
   const availableExchanges = Array.from(new Set(availableData.map(d => d.exchange)))
 
@@ -171,7 +182,7 @@ export default function Backtest() {
         loadChartForTask(task)
       }
     }
-  }, [selectedTaskId, loadedChartTaskId, loadChartForTask])
+  }, [selectedTaskId, loadedChartTaskId, loadChartForTask, tasks])
 
   const handleTaskClick = (task: BacktestTask) => {
     if (task.status === 'completed' && task.statistic) {

@@ -1,6 +1,7 @@
-import { useRef, useEffect } from 'react'
+import { useEffect, useRef, type ComponentProps } from 'react'
 import { X } from 'lucide-react'
 import Editor from '@monaco-editor/react'
+import { useAppSettings } from '@/lib/appSettings'
 
 interface EditorTab {
   path: string
@@ -27,10 +28,11 @@ export const StrategyEditor = ({
   onContentChange,
   onSave,
 }: StrategyEditorProps) => {
-  const editorRef = useRef<any>(null)
+  const settings = useAppSettings()
+  const editorRef = useRef<Parameters<NonNullable<ComponentProps<typeof Editor>['onMount']>>[0] | null>(null)
   const autoSaveTimerRef = useRef<number | null>(null)
 
-  const handleEditorDidMount = (editor: any) => {
+  const handleEditorDidMount = (editor: Parameters<NonNullable<ComponentProps<typeof Editor>['onMount']>>[0]) => {
     editorRef.current = editor
   }
 
@@ -40,7 +42,7 @@ export const StrategyEditor = ({
     if (editorRef.current && activeTab) {
       editorRef.current.setValue(activeTab.content)
     }
-  }, [activeTabIndex])
+  }, [activeTab, activeTabIndex])
 
   useEffect(() => {
     if (activeTab?.isDirty) {
@@ -120,13 +122,13 @@ export const StrategyEditor = ({
               }
             }}
             onMount={handleEditorDidMount}
-            theme="vs"
+            theme={settings.editor.theme === 'dark' ? 'vs-dark' : 'vs'}
             options={{
-              fontSize: 14,
+              fontSize: settings.editor.fontSize,
               lineNumbers: 'on',
               minimap: { enabled: false },
               scrollBeyondLastLine: false,
-              wordWrap: 'on',
+              wordWrap: settings.editor.wordWrap,
               automaticLayout: true,
               padding: { top: 16, bottom: 16 },
               renderLineHighlight: 'line',
