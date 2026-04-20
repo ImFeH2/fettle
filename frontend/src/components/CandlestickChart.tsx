@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, createSeriesMarkers, type HistogramData, type IChartApi, type ISeriesApi, type CandlestickData, type LineData, type MouseEventHandler, type MouseEventParams, type SeriesMarker, type Time, type ISeriesMarkersPluginApi } from 'lightweight-charts'
-import { BrushCleaning, Loader2, Minus, MousePointer2, Plus, RotateCcw, Square, Trash2, TrendingUp, type LucideIcon } from 'lucide-react'
+import { BrushCleaning, Loader2, Maximize2, Minimize2, Minus, MousePointer2, Plus, RotateCcw, Square, Trash2, TrendingUp, type LucideIcon } from 'lucide-react'
 import { ChartDrawingPrimitive, createDrawingId, getDrawingLabel, type ChartDrawing, type DraftDrawing, type DrawingPoint, type DrawingTool } from '@/components/chartDrawings'
 import { formatChartTime } from '@/utils/time'
 import type { Timeframe } from '@/types'
@@ -159,6 +159,7 @@ export default function CandlestickChart({
   onTimeframeChange,
   controls,
 }: CandlestickChartProps) {
+  const fullscreenContainerRef = useRef<HTMLDivElement>(null)
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartSurfaceRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
@@ -178,6 +179,8 @@ export default function CandlestickChart({
   const [drawings, setDrawings] = useState<ChartDrawing[]>([])
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null)
   const [draftKind, setDraftKind] = useState<DraftableDrawingTool | null>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isFullscreenSupported, setIsFullscreenSupported] = useState(false)
   const [markerTooltip, setMarkerTooltip] = useState<{
     detail: ChartMarkerDetail
     left: number
@@ -350,6 +353,36 @@ export default function CandlestickChart({
     chartRef.current?.timeScale().fitContent()
   }, [])
 
+  const syncChartSize = useCallback(() => {
+    if (!chartRef.current || !chartContainerRef.current || !chartSurfaceRef.current) {
+      return
+    }
+
+    chartRef.current.applyOptions({
+      width: chartContainerRef.current.clientWidth,
+      height: Math.max(320, chartSurfaceRef.current.clientHeight),
+    })
+  }, [])
+
+  const toggleFullscreen = useCallback(async () => {
+    const container = fullscreenContainerRef.current
+
+    if (!container || !document.fullscreenEnabled) {
+      return
+    }
+
+    try {
+      if (document.fullscreenElement === container) {
+        await document.exitFullscreen()
+        return
+      }
+
+      await container.requestFullscreen()
+    } catch (error) {
+      console.error('Failed to toggle fullscreen chart:', error)
+    }
+  }, [])
+
   useEffect(() => {
     markerDetailsRef.current = markerDetails
   }, [markerDetails])
@@ -374,6 +407,34 @@ export default function CandlestickChart({
   }, [clearDrawings, symbol])
 
   useEffect(() => {
+    const container = fullscreenContainerRef.current
+
+    setIsFullscreenSupported(
+      Boolean(container && document.fullscreenEnabled && typeof container.requestFullscreen === 'function')
+    )
+
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === container)
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }
+  }, [])
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      syncChartSize()
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [isFullscreen, syncChartSize])
+
+  useEffect(() => {
     if (!chartContainerRef.current) return
 
     const chart = createChart(chartContainerRef.current, {
@@ -386,7 +447,7 @@ export default function CandlestickChart({
         horzLines: { color: '#f0f0f0' },
       },
       width: chartContainerRef.current.clientWidth,
-      height: 500,
+      height: Math.max(320, chartSurfaceRef.current?.clientHeight ?? 500),
       localization: {
         timeFormatter: (timestamp: number) => formatChartTime(timestamp),
       },
@@ -451,11 +512,7 @@ export default function CandlestickChart({
     const indicatorSeries = indicatorSeriesRef.current
 
     const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-        })
-      }
+      syncChartSize()
     }
 
     window.addEventListener('resize', handleResize)
@@ -466,7 +523,7 @@ export default function CandlestickChart({
       candlestickSeries.detachPrimitive(drawingPrimitive)
       chart.remove()
     }
-  }, [syncDrawingPrimitive])
+  }, [syncChartSize, syncDrawingPrimitive])
 
   useEffect(() => {
     if (!seriesRef.current) {
@@ -642,6 +699,10 @@ export default function CandlestickChart({
       }
 
       if (event.key === 'Escape') {
+        if (document.fullscreenElement === fullscreenContainerRef.current) {
+          return
+        }
+
         if (draftDrawingRef.current) {
           event.preventDefault()
           clearDraftDrawing()
@@ -729,7 +790,13 @@ export default function CandlestickChart({
       : 'Esc to return to pointer'
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
+    <div
+      ref={fullscreenContainerRef}
+      className={`bg-white border border-gray-200 p-6 overflow-hidden flex flex-col ${isFullscreen
+        ? 'h-full w-full rounded-none border-0 p-4 sm:p-6'
+        : 'rounded-xl'
+        }`}
+    >
       {(symbol || controls || timeframeOptions.length > 1) && (
         <div className="flex flex-col gap-4 mb-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
@@ -794,6 +861,22 @@ export default function CandlestickChart({
                   <RotateCcw className="w-3.5 h-3.5" />
                   Reset View
                 </button>
+                {isFullscreenSupported && (
+                  <button
+                    type="button"
+                    onClick={toggleFullscreen}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 bg-white text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:text-gray-900"
+                    title={isFullscreen ? 'Exit Full Screen (Esc)' : 'Full Screen'}
+                    aria-label={isFullscreen ? 'Exit Full Screen' : 'Full Screen'}
+                  >
+                    {isFullscreen ? (
+                      <Minimize2 className="w-3.5 h-3.5" />
+                    ) : (
+                      <Maximize2 className="w-3.5 h-3.5" />
+                    )}
+                    {isFullscreen ? 'Exit Full Screen' : 'Full Screen'}
+                  </button>
+                )}
               </div>
             )}
 
@@ -877,7 +960,10 @@ export default function CandlestickChart({
         </div>
       )}
 
-      <div ref={chartSurfaceRef} className={`relative h-[500px] ${activeDrawingTool === 'select' ? '' : 'cursor-crosshair'}`}>
+      <div
+        ref={chartSurfaceRef}
+        className={`relative ${isFullscreen ? 'min-h-[420px] flex-1' : 'h-[500px]'} ${activeDrawingTool === 'select' ? '' : 'cursor-crosshair'}`}
+      >
         <div ref={chartContainerRef} className="w-full h-full" />
 
         {(drawingStatus || drawingShortcutHint) && data.length > 0 && (
